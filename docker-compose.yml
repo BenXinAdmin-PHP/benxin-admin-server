@@ -1,0 +1,47 @@
+# +----------------------------------------------------------------------
+# | BenXinAdmin · 本地依赖编排（仅 MySQL + Valkey）
+# | 仅用于本地开发（Mac 建议 OrbStack）；生产沿用裸机 + 宝塔，不用本文件。
+# | 变量取自同目录 .env（compose 自动读取）；启动：docker compose up -d
+# +----------------------------------------------------------------------
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: benxin-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root}
+      MYSQL_DATABASE: ${DB_NAME:-benxin_admin}
+      MYSQL_USER: ${DB_USER:-benxin}
+      MYSQL_PASSWORD: ${DB_PASS:-benxin}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - benxin-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${DB_ROOT_PASS:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:latest
+    container_name: benxin-valkey
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - benxin-valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  benxin-mysql-data:
+  benxin-valkey-data:
