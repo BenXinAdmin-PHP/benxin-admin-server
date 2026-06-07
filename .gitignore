@@ -10,3 +10,5 @@
 .vscode/
 .DS_Store
 composer.phar
+# Claude Code / agent 本地状态
+/.claude/
