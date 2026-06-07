@@ -1,0 +1,12 @@
+/vendor/
+/runtime/
+*.log
+.env
+.env.*
+!.env.example
+/public/storage
+/public/uploads
+.idea/
+.vscode/
+.DS_Store
+composer.phar
