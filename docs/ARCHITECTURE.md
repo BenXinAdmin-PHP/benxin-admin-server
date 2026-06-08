@@ -278,7 +278,9 @@ benxin-admin-web/src/
 ## 14. 模块进度看板
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| **M0** | 约定与脚手架（三仓库初始化、骨架、统一返回/异常/中间件、migration、依赖容器、本文件落地） | ✅ 已完成 |
+| **M0-A** | 后端脚手架（server：骨架/统一返回/中间件/迁移/端口隔离） | ✅ 已完成 |
+| **M0-B** | 后台前端脚手架（web：Vue3+EP+Pinia+路由+UnoCSS+ping 联调） | ⚪ 未开始 |
+| **M0-C** | C 端脚手架（uniapp：uni-app+wot-design-uni+双端构建+ping 联调） | ⚪ 未开始 |
 | M1 | 认证 + RBAC（JWT 双令牌、Casbin、管理员/角色/权限/菜单/部门/岗位） | ⚪ 未开始 |
 | M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
@@ -288,7 +290,7 @@ benxin-admin-web/src/
 
 > 状态图例：⚪ 未开始 ｜ 🔵 进行中 ｜ ✅ 已完成 ｜ ⏸ 暂停
 
-> M0 落地（2026-06-07，server 仓 5981d94，三端 dev 同步）：ThinkPHP 8.1.2 多应用骨架、统一返回/异常、request_id 全局贯穿、CORS、JWT/Casbin/OperLog 占位、bx_config 首表 + 迁移工具链、依赖端口隔离(3308/6380)。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装（生产 8.4 无此项）。
+> M0-A 落地（2026-06-07，server 仓 5981d94，三端 dev 同步）：ThinkPHP 8.1.2 多应用骨架、统一返回/异常、request_id 全局贯穿、CORS、JWT/Casbin/OperLog 占位、bx_config 首表 + 迁移工具链、依赖端口隔离(3308/6380)。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装（生产 8.4 无此项）。
 
 ---
 
