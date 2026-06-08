@@ -39,6 +39,11 @@ class Handle extends ThinkHandle
             return parent::render($request, $e);
         }
 
+        // 认证失败（JWT 缺失/无效/过期、refresh 失效）→ 401xxx + HTTP 401
+        if ($e instanceof AuthException) {
+            return Result::fail($e->bizCode, $e->getMessage(), null, 401);
+        }
+
         // 业务校验失败 → 422xxx
         if ($e instanceof ValidateException) {
             return Result::fail(ErrorCode::VALIDATE_FAIL, $e->getError() ?: $e->getMessage());

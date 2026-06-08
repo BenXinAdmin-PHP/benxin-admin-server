@@ -52,17 +52,22 @@ composer install
 
 # 2. 准备环境变量
 cp .env.example .env   # 按本地实际填写，勿提交真实密钥
+# 关键（M1 认证）：在 .env 配好 JWT 双密钥与超管初始密码（勿提交真实值）
+#   JWT_ADMIN_SECRET / JWT_API_SECRET ← openssl rand -hex 32
+#   SUPER_ADMIN_INIT_PWD             ← 自定义强密码，AuthSeeder 据此创建超管 admin
 
 # 3. 启动本地依赖（MySQL + Valkey，建议 Mac OrbStack）
 docker compose up -d
 
 # 4. 建表 + 初始化数据
 php think migrate:run
-php think seed:run
+php think seed:run                 # 首次全量；AuthSeeder 幂等，可单独重跑：php think seed:run -s AuthSeeder
 
 # 5. 本地启动（PHP-FPM 或内置服务器，独占 8801 避开本机其他项目占用的 8000）
 php think run -p 8801
 ```
+
+> 超管账号：用户名 `admin`，密码即 `.env` 的 `SUPER_ADMIN_INIT_PWD`（Argon2id 入库，种子不硬编码明文）。**首次登录后请立即在后台修改密码。**
 
 前端联调：web 的 `VITE_API_BASE`、uniapp 的 `VITE_API_BASE_URL` 默认指向 `http://127.0.0.1:8801`。
 
@@ -71,6 +76,13 @@ php think run -p 8801
 ```bash
 curl http://127.0.0.1:8801/admin/v1/ping   # -> {"code":0,"msg":"pong",...}
 curl http://127.0.0.1:8801/api/v1/ping      # -> {"code":0,"msg":"pong",...}
+
+# 后台认证闭环（M1-A）：登录拿令牌 → 访问受保护接口 → 刷新 → 登出
+curl -X POST http://127.0.0.1:8801/admin/v1/login -d 'username=admin&password=<SUPER_ADMIN_INIT_PWD>'
+#   -> data: { access_token, refresh_token, token_type:"Bearer", expires_in, refresh_expires_in }
+curl http://127.0.0.1:8801/admin/v1/profile -H 'Authorization: Bearer <access_token>'
+curl -X POST http://127.0.0.1:8801/admin/v1/refresh -d 'refresh_token=<refresh_token>'
+curl -X POST http://127.0.0.1:8801/admin/v1/logout  -H 'Authorization: Bearer <access_token>'
 ```
 
 > 说明：本仓库锁定 PHP 8.4；若本地为 8.1~8.3，临时用 `composer install --ignore-platform-req=php` 安装（仅本地妥协，生产无此项）。

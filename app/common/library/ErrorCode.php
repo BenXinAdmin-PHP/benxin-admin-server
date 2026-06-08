@@ -32,8 +32,9 @@ class ErrorCode
     public const PARAM_ERROR = 400000;
 
     // 401xxx 认证
-    public const UNAUTHORIZED   = 401001; // 未登录
-    public const TOKEN_EXPIRED  = 401003; // token 过期
+    public const UNAUTHORIZED    = 401001; // 未登录
+    public const LOGIN_FAIL      = 401002; // 账号或密码错误（防枚举统一文案）
+    public const TOKEN_EXPIRED   = 401003; // token 过期
     public const REFRESH_INVALID = 401004; // 刷新令牌失效
 
     // 403xxx 权限
@@ -60,6 +61,7 @@ class ErrorCode
         self::SUCCESS           => 'success',
         self::PARAM_ERROR       => '请求参数错误',
         self::UNAUTHORIZED      => '未登录或登录已失效',
+        self::LOGIN_FAIL        => '账号或密码错误',
         self::TOKEN_EXPIRED     => '登录已过期，请重新登录',
         self::REFRESH_INVALID   => '刷新令牌已失效，请重新登录',
         self::FORBIDDEN         => '没有访问权限',
