@@ -29,7 +29,7 @@
 | ADR-2 | 认证 | 后台与 C 端**分离的双 guard、独立密钥**；均用 **JWT 双令牌（access + refresh）** |
 | ADR-3 | C 端登录策略 | **懒登录**：用到核心业务前不强制登录（含"我的"页）。登录即注册，微信 + 手机号缺一不可 |
 | ADR-4 | C 端报文加密 | BenXin 那套 C 端 AES-256-CBC 报文加密做成**可配置开关，默认关**，需要时开 |
-| ADR-5 | 数据库结构管理 | 用 **think-migration + Seeder**，禁止散落裸 SQL；初始数据（超管/菜单/字典/Casbin 策略）走 Seeder |
+| ADR-5 | 数据库结构管理 | 用 **think-migration + Seeder**，禁止散落裸 SQL；初始数据（超管/菜单/字典/Casbin 策略）走 Seeder。**各表迁移随其所属阶段产出，M0 不预建核心表**（M0 仅 bx_config；bx_admin/role/menu/dept/post/casbin_rule 等核心表归 M1，bx_dict/oper_log/login_log/file 归 M2） |
 | ADR-6 | 代码生成器时序 | **约定先行**：先手写 2~3 个标准 CRUD 模块沉淀"黄金样板"，**再**让生成器复刻样板。不可反序 |
 | ADR-7 | 缓存选型 | **Valkey（BSD）** 为默认，规避 Redis 8 的 AGPLv3 争议；协议兼容，PHP 客户端无缝 |
 
@@ -41,7 +41,7 @@
 | 组件 | 选型 | 版本/说明 |
 |---|---|---|
 | PHP | PHP **8.4** | ThinkPHP 8.1.4 已支持到 PHP 8.5，未来可平滑升 |
-| 框架 | ThinkPHP **8.1.4** | Apache-2.0 |
+| 框架 | ThinkPHP **^8.1**（实测装 8.1.2；8.1.4 上架后随 composer update 跟进） | Apache-2.0 |
 | 数据库 | MySQL **8** | InnoDB / utf8mb4 |
 | 缓存 | **Valkey** 最新 | BSD-3，Redis 协议兼容 |
 | Web | Nginx | 生产裸机 + 宝塔 + SafeLine（沿用现有） |
@@ -249,6 +249,7 @@ benxin-admin-web/src/
 - **依赖（MySQL + Valkey）跑容器**：Mac 上用 **OrbStack**（省内存、Apple Silicon 原生、个人免费）。仓库附 `docker-compose.yml` 仅编排这两个依赖，`docker compose up -d` 即起。
 - **PHP-FPM/`php think run` 本地原生跑**（调试/Xdebug 体验更好）。Node 24 跑 web/uniapp。
 - **生产不用 Docker**，沿用裸机 + 宝塔 + SafeLine。
+- **依赖容器端口（实测隔离）**：MySQL 映射宿主机 **3308**、Valkey **6380**（避开本机原生 MySQL 3306 与另一容器占用的 3307）。改端口后须 `docker compose down -v` 清卷重起，使 MySQL 按新 .env 重新初始化账号。
 
 ---
 
@@ -277,7 +278,7 @@ benxin-admin-web/src/
 ## 14. 模块进度看板
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| **M0** | 约定与脚手架（三仓库初始化、骨架、统一返回/异常/中间件、migration、依赖容器、本文件落地） | 🔵 进行中 |
+| **M0** | 约定与脚手架（三仓库初始化、骨架、统一返回/异常/中间件、migration、依赖容器、本文件落地） | ✅ 已完成 |
 | M1 | 认证 + RBAC（JWT 双令牌、Casbin、管理员/角色/权限/菜单/部门/岗位） | ⚪ 未开始 |
 | M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
@@ -286,6 +287,8 @@ benxin-admin-web/src/
 | M6 | （可选）官网 + 首页拖拽搭建 | ⚪ 未开始 |
 
 > 状态图例：⚪ 未开始 ｜ 🔵 进行中 ｜ ✅ 已完成 ｜ ⏸ 暂停
+
+> M0 落地（2026-06-07，server 仓 5981d94，三端 dev 同步）：ThinkPHP 8.1.2 多应用骨架、统一返回/异常、request_id 全局贯穿、CORS、JWT/Casbin/OperLog 占位、bx_config 首表 + 迁移工具链、依赖端口隔离(3308/6380)。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装（生产 8.4 无此项）。
 
 ---
 
