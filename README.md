@@ -60,15 +60,17 @@ docker compose up -d
 php think migrate:run
 php think seed:run
 
-# 5. 本地启动（PHP-FPM 或内置服务器）
-php think run -p 8800
+# 5. 本地启动（PHP-FPM 或内置服务器，独占 8801 避开本机其他项目占用的 8000）
+php think run -p 8801
 ```
+
+前端联调：web 的 `VITE_API_BASE`、uniapp 的 `VITE_API_BASE_URL` 默认指向 `http://127.0.0.1:8801`。
 
 自测：
 
 ```bash
-curl http://127.0.0.1:8800/admin/v1/ping   # -> {"code":0,"msg":"pong",...}
-curl http://127.0.0.1:8800/api/v1/ping      # -> {"code":0,"msg":"pong",...}
+curl http://127.0.0.1:8801/admin/v1/ping   # -> {"code":0,"msg":"pong",...}
+curl http://127.0.0.1:8801/api/v1/ping      # -> {"code":0,"msg":"pong",...}
 ```
 
 > 说明：本仓库锁定 PHP 8.4；若本地为 8.1~8.3，临时用 `composer install --ignore-platform-req=php` 安装（仅本地妥协，生产无此项）。

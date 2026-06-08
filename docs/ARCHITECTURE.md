@@ -58,10 +58,12 @@
 | 构建 | Vite **7/8**（跟随脚手架默认，勿锁 5） | Vite 8 为 Rolldown 内核 |
 | UI | Element Plus **2.14.x** | — |
 | 语言 | TypeScript | 强制 |
-| 状态/路由 | Pinia + Vue Router 4 | — |
+| 状态/路由 | Pinia + Vue Router（4/5 均可，跟随脚手架，当前实测 5.x） | — |
 | 原子 CSS | **UnoCSS** | — |
 | HTTP | Axios（封装）+ OpenAPI 自动生成 API | — |
 | 工程参考 | vue-pure-admin / vue-vben-admin(5.x EP 版) | 仅借鉴结构，不直接用作底座 |
+
+> M0-B 实测锁定版本（均跟随脚手架，未手动锁）：Vue 3.5.x / Vite 8.x / Element Plus 2.14.x / UnoCSS 66.x / Vue Router 5.0.x / Pinia 3.x / TypeScript 6.x。
 
 ### C 端 `benxin-admin-uniapp`
 | 组件 | 选型 |
@@ -70,6 +72,8 @@
 | UI | **wot-design-uni**（MIT，TS 优先） |
 | 状态/请求 | Pinia + 封装 `uni.request` |
 | 产物 | 一套代码输出 **微信小程序 + H5**（H5 主要跑在公众号环境内） |
+
+> M0-C 实测锁定版本：uni-app 3.x(vue3) / Vue 3.5.x / Vite 5.x / wot-design-uni 1.14.x(MIT) / Pinia 2.3.x。
 
 ### 官网（延后）
 - Nuxt **4.x**，放到最后 M6，前期可不做。
@@ -250,6 +254,7 @@ benxin-admin-web/src/
 - **PHP-FPM/`php think run` 本地原生跑**（调试/Xdebug 体验更好）。Node 24 跑 web/uniapp。
 - **生产不用 Docker**，沿用裸机 + 宝塔 + SafeLine。
 - **依赖容器端口（实测隔离）**：MySQL 映射宿主机 **3308**、Valkey **6380**（避开本机原生 MySQL 3306 与另一容器占用的 3307）。改端口后须 `docker compose down -v` 清卷重起，使 MySQL 按新 .env 重新初始化账号。
+- **后端本地服务端口**：`php think run -p 8801`（独占 8801，避开本机其他项目占用的 8000）。前端 baseURL（web 的 `VITE_API_BASE`、uniapp 的 `VITE_API_BASE_URL`）默认指向 8801。
 
 ---
 
@@ -278,9 +283,9 @@ benxin-admin-web/src/
 ## 14. 模块进度看板
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| **M0-A** | 后端脚手架（server：骨架/统一返回/中间件/迁移/端口隔离） | ✅ 已完成 |
-| **M0-B** | 后台前端脚手架（web：Vue3+EP+Pinia+路由+UnoCSS+ping 联调） | ⚪ 未开始 |
-| **M0-C** | C 端脚手架（uniapp：uni-app+wot-design-uni+双端构建+ping 联调） | ⚪ 未开始 |
+| **M0-A** | 后端脚手架（server：骨架/统一返回/中间件/迁移/端口隔离/路由+CORS） | ✅ 已完成 |
+| **M0-B** | 后台前端脚手架（web：Vue3.5+Vite8+EP2.14+Pinia+Router5+UnoCSS+ping 联调） | ✅ 已完成 |
+| **M0-C** | C 端脚手架（uniapp：uni-app+wot-design-uni+H5/微信小程序双端+ping 联调） | ✅ 已完成 |
 | M1 | 认证 + RBAC（JWT 双令牌、Casbin、管理员/角色/权限/菜单/部门/岗位） | ⚪ 未开始 |
 | M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
@@ -291,6 +296,8 @@ benxin-admin-web/src/
 > 状态图例：⚪ 未开始 ｜ 🔵 进行中 ｜ ✅ 已完成 ｜ ⏸ 暂停
 
 > M0-A 落地（2026-06-07，server 仓 5981d94，三端 dev 同步）：ThinkPHP 8.1.2 多应用骨架、统一返回/异常、request_id 全局贯穿、CORS、JWT/Casbin/OperLog 占位、bx_config 首表 + 迁移工具链、依赖端口隔离(3308/6380)。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装（生产 8.4 无此项）。
+
+> M0 三端落地（2026-06-08，三仓 dev 双推同步）：server（路由+CORS 修复，独占 8801）、web（Vue3.5/Vite8/EP2.14/Router5，ping 联调通）、uniapp（uni-app3.x/wot-design-uni，H5+微信小程序双端 ping 均通）。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装（生产 8.4）；wot-design-uni 1.14 内部 Sass @import deprecation 警告（上游问题，不影响构建）。
 
 ---
 
