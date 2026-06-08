@@ -73,7 +73,9 @@ curl http://127.0.0.1:8800/api/v1/ping      # -> {"code":0,"msg":"pong",...}
 
 > 说明：本仓库锁定 PHP 8.4；若本地为 8.1~8.3，临时用 `composer install --ignore-platform-req=php` 安装（仅本地妥协，生产无此项）。
 >
-> 端口隔离：依赖容器默认映射到宿主机 **MySQL 3307 / Valkey 6380**（避开本机原生 MySQL 3306 / Redis 6379），容器内部仍是 3306/6379。如本机无端口冲突，可在 `.env` 自行改回 3306/6379。
+> 端口隔离：依赖容器默认映射到宿主机 **MySQL 3308 / Valkey 6380**（避开本机原生 MySQL 3306 / Redis 6379），容器内部仍是 3306/6379。如本机无端口冲突，可在 `.env` 自行改回 3306/6379。
+>
+> 首次起容器后若再改过 `DB_PORT`/账号等，需 `docker compose down -v` 清掉数据卷再 `docker compose up -d`，让 MySQL 按新 `.env` 重新初始化账号库（否则旧卷里的账号不会更新）。
 
 ## 开发约定
 
