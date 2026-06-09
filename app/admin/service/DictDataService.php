@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
+// | @updated   2026-06-10 14:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -13,9 +14,9 @@ namespace app\admin\service;
 
 use app\common\base\BxService;
 use app\common\exception\BusinessException;
+use app\common\library\BxCache;
 use app\common\model\Dict;
 use app\common\model\DictData;
-use think\facade\Cache;
 
 /**
  * 字典数据项服务 + 字典取数缓存（★ M2 通用缓存模式，M2-B 参数配置复用）。
@@ -40,41 +41,26 @@ class DictDataService extends BxService
      */
     public function getByType(string $type): array
     {
-        $key   = self::cacheKey($type);
-        $store = self::store();
-
-        $cached = $store->get($key);
-        if (is_array($cached)) {
-            return $cached;
-        }
-
-        $list = DictData::where('dict_type', $type)
-            ->where('status', 1)
-            ->order('sort', 'asc')->order('id', 'asc')
-            ->field('label,value,list_class,is_default,sort')
-            ->select()->toArray();
-
-        $store->set($key, $list, self::CACHE_TTL);
-
-        return $list;
+        return BxCache::remember(self::cacheKey($type), self::CACHE_TTL, static function () use ($type) {
+            return DictData::where('dict_type', $type)
+                ->where('status', 1)
+                ->order('sort', 'asc')->order('id', 'asc')
+                ->field('label,value,list_class,is_default,sort')
+                ->select()->toArray();
+        });
     }
 
     /** 失效某字典类型缓存（写操作后调用）。 */
     public static function clearCache(string $type): void
     {
         if ($type !== '') {
-            self::store()->delete(self::cacheKey($type));
+            BxCache::forget(self::cacheKey($type));
         }
     }
 
     protected static function cacheKey(string $type): string
     {
         return 'dict:data:' . $type;
-    }
-
-    protected static function store()
-    {
-        return Cache::store((string) config('jwt.store', 'redis'));
     }
 
     // ------------------------------------------------------------------

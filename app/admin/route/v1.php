@@ -94,6 +94,14 @@ Route::group('v1', function () {
         Route::delete('dict-data/:id', 'DictData/delete')->middleware(CasbinAuth::class, 'system:dict:delete')->pattern(['id' => '\d+']);
         Route::get('dict-data', 'DictData/index')->middleware(CasbinAuth::class, 'system:dict:list');
         Route::post('dict-data', 'DictData/save')->middleware(CasbinAuth::class, 'system:dict:create');
+
+        // 参数配置（perm: system:config:*）；group/:group 取数须排在 /:id 之前
+        Route::get('configs/group/:group', 'Config/group')->middleware(CasbinAuth::class, 'system:config:list');
+        Route::get('configs/:id', 'Config/read')->middleware(CasbinAuth::class, 'system:config:list')->pattern(['id' => '\d+']);
+        Route::put('configs/:id', 'Config/update')->middleware(CasbinAuth::class, 'system:config:update')->pattern(['id' => '\d+']);
+        Route::delete('configs/:id', 'Config/delete')->middleware(CasbinAuth::class, 'system:config:delete')->pattern(['id' => '\d+']);
+        Route::get('configs', 'Config/index')->middleware(CasbinAuth::class, 'system:config:list');
+        Route::post('configs', 'Config/save')->middleware(CasbinAuth::class, 'system:config:create');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----
