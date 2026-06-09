@@ -30,13 +30,17 @@ class AdminService extends BxService
 
     /**
      * 分页列表（keyword: username/nickname/mobile；dept_id / status 精确）。
+     * 挂数据权限作用域（ADR-9，本步示范载体）：核心表 dept 维度用 dept_id、本人维度用 id。
      *
      * @param array<string,mixed> $filters
      * @return array{list:array<int,mixed>,total:int}
      */
-    public function list(array $filters, int $page, int $pageSize): array
+    public function list(array $filters, int $page, int $pageSize, Admin $acting): array
     {
         $query = Admin::order('id', 'desc');
+
+        // 数据权限：按当前登录管理员可见范围过滤（与软删/租户/超管护栏作用域叠加）
+        $this->applyDataScope($query, $acting, 'dept_id', 'id');
 
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {

@@ -32,7 +32,7 @@ class Admin extends BxController
             'keyword' => $this->request->param('keyword', ''),
             'dept_id' => $this->request->param('dept_id', ''),
             'status'  => $this->request->param('status', ''),
-        ], $page, $size);
+        ], $page, $size, $this->request->adminUser);
 
         return $this->paginate($result['list'], $result['total'], $page, $size);
     }

@@ -26,6 +26,7 @@ class RoleValidate extends BxValidate
         'data_scope' => 'in:1,2,3,4,5',
         'remark'     => 'max:255',
         'menu_ids'   => 'array',
+        'dept_ids'   => 'array',
     ];
 
     protected $message = [
@@ -43,7 +44,7 @@ class RoleValidate extends BxValidate
 
     public function sceneUpdate(): static
     {
-        return $this->only(['name', 'code', 'sort', 'status', 'data_scope', 'remark'])
+        return $this->only(['name', 'code', 'sort', 'status', 'data_scope', 'remark', 'dept_ids'])
             ->remove('name', 'require')
             ->remove('code', 'require');
     }
