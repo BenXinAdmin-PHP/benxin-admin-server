@@ -1,10 +1,11 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   控制器基类 — 统一响应入口
+// | @mission   控制器基类 — 统一响应入口 + 分页参数收口
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
+// | @updated   2026-06-09 14:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -64,5 +65,21 @@ abstract class BxController
     protected function paginate(array $list, int $total, int $page, int $pageSize, string $msg = 'success'): Response
     {
         return Result::paginate($list, $total, $page, $pageSize, $msg);
+    }
+
+    /**
+     * 统一解析分页参数：page（≥1，默认 1）、page_size（默认 15，上限 100）。
+     *
+     * @return array{0:int,1:int} [page, pageSize]
+     */
+    protected function pageParam(int $defaultSize = 15, int $maxSize = 100): array
+    {
+        $page = max(1, (int) $this->request->param('page', 1));
+        $size = (int) $this->request->param('page_size', $defaultSize);
+        if ($size < 1) {
+            $size = $defaultSize;
+        }
+
+        return [$page, min($size, $maxSize)];
     }
 }

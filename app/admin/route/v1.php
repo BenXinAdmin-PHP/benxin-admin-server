@@ -30,6 +30,18 @@ Route::group('v1', function () {
         Route::get('profile', 'Auth/profile');
     })->middleware(JwtAuth::class);
 
+    // ---- 系统管理 CRUD（需登录 + 按 perm 鉴权；JwtAuth → CasbinAuth）----
+    // 路由顺序铁律：具体 action > /:id > 集合。
+    Route::group(function () {
+        // 菜单（perm: system:menu:*）
+        Route::get('menus/tree', 'Menu/tree')->middleware(CasbinAuth::class, 'system:menu:list');
+        Route::put('menus/:id/status', 'Menu/status')->middleware(CasbinAuth::class, 'system:menu:update')->pattern(['id' => '\d+']);
+        Route::get('menus/:id', 'Menu/read')->middleware(CasbinAuth::class, 'system:menu:list')->pattern(['id' => '\d+']);
+        Route::put('menus/:id', 'Menu/update')->middleware(CasbinAuth::class, 'system:menu:update')->pattern(['id' => '\d+']);
+        Route::delete('menus/:id', 'Menu/delete')->middleware(CasbinAuth::class, 'system:menu:delete')->pattern(['id' => '\d+']);
+        Route::post('menus', 'Menu/save')->middleware(CasbinAuth::class, 'system:menu:create');
+    })->middleware(JwtAuth::class);
+
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----
     // 验证 RBAC enforce：需 system:admin:list 权限，超管通配放行、无策略角色 403000。
     if (app()->isDebug()) {

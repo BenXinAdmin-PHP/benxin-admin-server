@@ -44,7 +44,12 @@ class Handle extends ThinkHandle
             return Result::fail($e->bizCode, $e->getMessage(), null, 401);
         }
 
-        // 业务校验失败 → 422xxx
+        // 业务异常（Service 层业务规则不满足）→ 422xxx（HTTP 200）
+        if ($e instanceof BusinessException) {
+            return Result::fail($e->bizCode, $e->getMessage());
+        }
+
+        // 入参校验失败 → 422xxx
         if ($e instanceof ValidateException) {
             return Result::fail(ErrorCode::VALIDATE_FAIL, $e->getError() ?: $e->getMessage());
         }

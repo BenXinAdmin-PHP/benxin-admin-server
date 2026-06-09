@@ -93,6 +93,24 @@ class CasbinService
     }
 
     /**
+     * 清空某角色在某域下的全部 p 策略（删除角色 / 覆盖式重新分配前调用）。
+     * 按字段 v0(sub)=roleCode、v1(dom)=dom 过滤删除。
+     */
+    public static function removeAllForRole(string $roleCode, int|string $dom): bool
+    {
+        return (bool) self::enforcer()->removeFilteredPolicy(0, $roleCode, (string) $dom);
+    }
+
+    /**
+     * 删除引用了某 perm 的全部 p 策略（删除菜单按钮时清理悬空授权）。
+     * 按字段 v2(obj)=perm 过滤删除（跨角色、跨域）。
+     */
+    public static function removePolicyByPerm(string $perm): bool
+    {
+        return (bool) self::enforcer()->removeFilteredPolicy(2, $perm);
+    }
+
+    /**
      * 重新从存储装载策略（增删策略后或测试中调用）。
      */
     public static function reload(): void
