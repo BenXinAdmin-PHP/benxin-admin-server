@@ -112,6 +112,13 @@ Route::group('v1', function () {
         Route::get('login-logs/:id', 'LoginLog/read')->middleware(CasbinAuth::class, 'system:loginlog:list')->pattern(['id' => '\d+']);
         Route::get('login-logs', 'LoginLog/index')->middleware(CasbinAuth::class, 'system:loginlog:list');
         Route::delete('login-logs', 'LoginLog/clear')->middleware(CasbinAuth::class, 'system:loginlog:delete');
+
+        // 文件管理（perm: system:file:list|upload|delete）；具体 action > /:id > 集合
+        Route::post('files/upload', 'File/upload')->middleware(CasbinAuth::class, 'system:file:upload');
+        Route::get('files/:id/raw', 'File/raw')->middleware(CasbinAuth::class, 'system:file:list')->pattern(['id' => '\d+']);
+        Route::get('files/:id', 'File/read')->middleware(CasbinAuth::class, 'system:file:list')->pattern(['id' => '\d+']);
+        Route::delete('files/:id', 'File/delete')->middleware(CasbinAuth::class, 'system:file:delete')->pattern(['id' => '\d+']);
+        Route::get('files', 'File/index')->middleware(CasbinAuth::class, 'system:file:list');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----

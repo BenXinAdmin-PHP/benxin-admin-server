@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.9 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v1.10 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -305,7 +305,7 @@ benxin-admin-web/src/
 | **M2-A** | 字典管理（bx_dict 类型 + bx_dict_data 数据项 + 取数接口 + 缓存） | ✅ 已完成 |
 | **M2-B** | 参数配置（bx_config CRUD + 分组 + 敏感值 AES 入库 + 缓存） | ✅ 已完成 |
 | **M2-C** | 操作日志 + 登录日志（RequestLog 中间件自动记录 + 接入登录流） | ✅ 已完成 |
-| M2-D | 文件管理（bx_file 上传 + 本地驱动起步 + OSS/七牛抽象、密钥 AES；首次落地 create_by/create_dept + BxModel 自动填充钩子） | ⚪ 未开始 |
+| **M2-D** | 文件管理（bx_file 上传 + 本地驱动起步 + OSS/七牛抽象、密钥 AES；首次落地 create_by/create_dept + BxModel 自动填充钩子） | ✅ 已完成（M2 收官，待 PM 整体收口） |
 | M3 | 代码生成器 | ⚪ 未开始 |
 | M4 | 通用业务（内容/支付/消息/微信配置） | ⚪ 未开始 |
 | M5 | C 端 uni-app（登录/首页/我的，懒登录） | ⚪ 未开始 |
@@ -336,7 +336,11 @@ benxin-admin-web/src/
 
 > M2-B 落地（2026-06-09，server 仓 commit 2d9e3f5，GitHub+Gitee dev 双推）：**参数配置**。bx_config 增列 `name`/`is_sensitive`/`value_type`/`sort`（value 沿用 text 容纳密文）。**缓存抽件 `app/common/library/BxCache`**（remember/forget/store，走 Valkey），DictDataService 改用并回归不回退。**加解密 `app/common/library/ConfigCrypt`**：AES-256-CBC、随机 IV、存 `base64(iv+cipher)`、密钥取 .env `CONFIG_CRYPT_KEY` 经 **SHA-256 规整为 32 字节**、decrypt 失败降级空串、`mask` 脱敏（前后各 2 位+****）；GCM 切换点已在类注释标注。配置 CRUD：敏感项加密入库、HTTP 一律脱敏回显、**更新提交脱敏占位则不更新原值**（防误清）、切换 is_sensitive 转换形态；(group,key) 唯一 withTrashed。取数双形态：HTTP `GET /admin/v1/configs/group/:group`（脱敏）+ 内部 `ConfigService::get($key)`/`getGroup($group)`（解密明文供业务调用）。**缓存单聚合键 `bx:config:all` 存原始库值（敏感=密文）**，写失效、TTL 86400，Valkey 实测无明文敏感值。种子：参数配置菜单 + `system:config:*` 4 perms + 敏感示例 `wechat/mp_app_secret`（占位假串、不放真实密钥）。已知项：① 缓存用单键 config:all（配置体量小的等价简化）；② `ConfigService::get($key)` 要求 key 跨分组唯一，**M4 多组同名 key 前需补 `getByGroupKey($group,$key)`**；③ 加密为 CBC（GCM 切换点已注释）。
 
-> M2-C 落地（2026-06-10，server 仓 dev 双推）：操作日志 + 登录日志，重心在**自动记录 + 脱敏红线 + 日志故障不影响主请求**。① 迁移 `bx_oper_log`/`bx_login_log`——**只增不改不软删**（仅 created_at），Model 直接继承 `think\Model`（关 updated_at/软删/租户作用域）。② **操作日志由 `RequestLog` 全局中间件自动记录**：仅写方法（POST/PUT/DELETE/PATCH），GET 不记；采集 method/path/perm/ip/ua/耗时/response_code/http_status/request_id + 操作人（JwtAuth 注入 adminId/adminUser）；perm 由 `CasbinAuth` 注入 `request->requiredPerm`；**全程 try/catch 吞错**（失败仅 Log::error，实测临时改表名时主接口仍 code0）。③ **脱敏红线 `app/common/library/LogSanitizer`**：黑名单（password/old_password/new_password/access_token/refresh_token/token）+ 语义正则（pass/secret/token/credential/api_key/app_secret）+ `/configs` 写接口额外打码 `value`，递归遍历嵌套；实测改密/敏感配置/登录的 request_body **无任何明文密码/密钥**。④ **登录日志接入 `AuthService::login`**：成功 status=1、失败 status=0（统一文案"账号或密码错误"，不泄露枚举），失败也记 IP，try/catch 吞错。⑤ 只读 + 清理：`GET /admin/v1/oper-logs[/:id]`、`/login-logs[/:id]`、`DELETE`（**需 start_time/end_time 或 all=1，防裸删全表**）；perm `system:operlog:*`/`system:loginlog:*`。⑥ 种子：两菜单 + 4 perms（菜单 36→42）。日志表**不挂 applyDataScope**（§5.1），记 admin_id 普通 where 筛选。自测 14/14（写记录/GET 不记/字段完整/脱敏红线/登录成功失败/写失败不影响主流程/清理防误清+范围生效/越权 403000）。已知项：① 同步轻量写，异步队列(think-queue)列高并发后续；② 分区/归档/定时清理列运维后续；③ 前端页面随排期补。
+> M2-C 落地（2026-06-09，server 仓 commit 4324e06，GitHub+Gitee dev 双推）：**操作日志 + 登录日志**。新增 `bx_oper_log`（admin_id/username/method/path/perm/ip/ua/request_body/response_code/http_status/duration_ms/request_id）+ `bx_login_log`（username/admin_id/ip/ua/status/msg/request_id），**两表仅 created_at、不软删/不挂租户作用域**（Model 直接继承 think\Model）。**RequestLog 中间件**（全局最外层）扩展自动记录：仅记写方法（POST/PUT/DELETE/PATCH）、GET 跳过；$next 返回后读 JwtAuth 注入的 adminId + CasbinAuth 注入的 requiredPerm，捕获最终 code/耗时；全程 try/catch 吞错（失败仅 Log::error）。**登录日志**接入 AuthService::login（成功 status=1 / 失败 status=0 统一文案不区分账号不存在与密码错、失败也记 IP）。**脱敏红线 `app/common/library/LogSanitizer`**：黑名单（password/old_password/new_password/confirm_password/access_token/refresh_token/token）+ 语义正则（pass/secret/token/credential/api_key/app_secret）+ /configs 写接口额外打码 value，递归遍历嵌套 body 命中键整体替换 ******；改密/敏感配置/登录三处实测 request_body 无明文。查询/清理接口：oper-logs/login-logs list+detail+清理；**清理防裸 DELETE 全表**（需 start_time/end_time 或显式 all=1，否则 422）。日志故障不拖垮主流程（RENAME TABLE 模拟写失败 → 主接口仍 code0/200）。LogMenuSeeder 幂等：操作日志/登录日志菜单 + `system:operlog:list|delete`/`system:loginlog:list|delete`（菜单 36→42）。14/14 自测全绿。已知项：① 日志同步轻量写，异步队列(think-queue)列高并发后续；② 日志分区/归档/定时清理列运维后续。**运维经验**：本机 Docker Desktop 异常关闭后，MySQL 容器因**残留 socket lock 文件**陷入重启循环；`docker compose down && up -d` 重建容器即修复，**命名数据卷 `benxin-mysql-data` 保留、表与数据完好**（印证幂等种子 + 命名卷的零损失设计）。
+
+> M2-D 落地（2026-06-10，server 仓 dev 双推）：**文件管理 + M2 收官**。① **BxModel 自动填充钩子**（`onBeforeInsert`）：表含 `create_by`/`create_dept` 列且登录态 → 自动写 adminId/dept_id（`getTableFields()` 判列、入参已给不覆盖）；**CLI/seeder/未认证安全跳过**（实测无登录 insert 不报错、值默认 0）。§5.1 钩子首落，后续带这两列的业务表（含 M3 生成器产物）即开即用 ADR-9。② 迁移 `bx_file`（含 create_by/create_dept + 软删）+ File 模型。③ **存储抽象 `app/common/library/storage`**：`StorageInterface`(put/url/delete) + **LocalStorage**（存项目根 `storage/`，**public 之外、Web 不可直链/执行**，经后端 `GET /files/:id/raw` 受控下载）+ Oss/Qiniu 骨架(TODO) + StorageManager 工厂（驱动取 bx_config `storage_driver`，云 AK/SK 经 `ConfigService::get` 敏感 AES，复用 M2-B）。④ **上传安全（§8 硬指标）**：大小上限 + **finfo 真实 MIME** + 扩展名白名单 + **MIME/扩展名双重校验**（实测 `.php`、php 改名 `.jpg` 均被拒）+ **uuid 重命名**（禁原名，防穿越/覆盖/可执行落地）+ 非 Web 目录。⑤ **ADR-9 数据权限在真业务表首示范**：`GET /files` 挂 `applyDataScope($q,$admin,'create_dept','create_by')`，实测两部门账号各只见本部门文件、超管见全部。⑥ 删除软删记录、**物理文件保留**（GC 后续）。⑦ 种子：文件管理菜单 + `system:file:list|upload|delete`（菜单 42→46）。自测 17/18（唯一未达项：超大文件本机 php.ini `post_max_size=8M` 在 PHP 层先拒、未触达 app 层 10MB 守卫——安全成立[不入库]，干净 app 层 422 需 php.ini 调到 ≥app 限额，即"需匹配"约定）。已知项：物理文件 GC/秒传/缩略图、云驱动实现列后续。
+
+> **M2 收官（2026-06-10）**：系统管理五块闭环——字典(A)/参数配置+敏感 AES(B)/操作+登录日志(C)/文件管理(D)。新沉淀可复用基建：`BxCache`(读回填/写失效)、`ConfigCrypt`(AES+脱敏)、`LogSanitizer`(日志脱敏)、`BxModel` 自动填充钩子(create_by/create_dept)、`StorageInterface` 存储抽象；ADR-9 数据权限已在真业务表 bx_file 跑通。黄金样板 + 这些基建即 **M3 代码生成器**的复刻目标。
 
 ---
 
