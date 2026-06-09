@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.3 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v1.5 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -33,6 +33,7 @@
 | ADR-6 | 代码生成器时序 | **约定先行**：先手写 2~3 个标准 CRUD 模块沉淀"黄金样板"，**再**让生成器复刻样板。不可反序 |
 | ADR-7 | 缓存选型 | **Valkey（BSD）** 为默认，规避 Redis 8 的 AGPLv3 争议；协议兼容，PHP 客户端无缝 |
 | ADR-8 | M1 JWT 库选型 | 用 **lcobucci/jwt**（BSD-3，支持 PHP 8.2~8.5）作底层令牌库，**自建 `BxJwt` 服务层**承载双 guard / 双令牌 / Valkey 白黑名单。不用 firebase/php-jwt（太底层），不用 thans·xiaodi 等 TP 全家桶中间件（其黑名单偏 SSO 单点语义、逻辑藏第三方包不利于黄金样板复刻与长期可控）。签名算法 **HS256 起步**，双 guard 各自独立 secret 入 `.env`（`JWT_ADMIN_SECRET` / `JWT_API_SECRET`，≥32 字节随机）；未来需跨服务校验再平滑切 RS256。Casbin 仅负责 RBAC，JWT 库不碰权限 |
+| ADR-9 | 数据权限模型（M1-D） | `data_scope` 范围枚举 **1 全部 / 2 本部门 / 3 本部门及以下 / 4 仅本人 / 5 自定义**；多角色取**最宽**（任一为全部则全部；否则各角色 dept 可见集合求并集；全为仅本人才限本人）。"本部门及以下"用 MySQL8 **递归 CTE** 实时查子树（零冗余、移动部门免维护路径）；自定义范围存关联表 **`bx_role_dept`**。过滤注入点为 `BxModel`/`BxService` 的**数据范围作用域**，模块**按需开启**（非全局强制）。业务表启用数据权限须带 `create_by`(+可选 `create_dept`)；核心表 `bx_admin` 用自身 `dept_id`、"仅本人"用 `id`。M1-D 在 `bx_admin` 列表上示范全五档 |
 
 ---
 
@@ -137,12 +138,19 @@ benxin-admin-web/src/
 - **表前缀**：`bx_`，表名 **snake_case 单数**（如 `bx_admin`、`bx_role`、`bx_menu`、`bx_dept`、`bx_post`、`bx_dict`、`bx_config`、`bx_oper_log`、`bx_login_log`、`bx_file`，Casbin 规则表 `bx_casbin_rule`）。
 - **统一时间字段**：`created_at` / `updated_at` / `deleted_at`（datetime），软删除走 `deleted_at`。
 - **多租户预留**：业务表统一带 `tenant_id`（unsigned bigint，默认 0；单租户模式下恒为 0）。
+- **软删唯一键不可复用**：唯一索引（如 `role.code`、`admin.username`）不区分软删行，唯一校验含已删行（`withTrashed`，前置拦 422 避免落库 500）；软删后该值**不可复用**，需复用走 M2 彻底删除。不采用"后缀释放（`__del_{id}`）"或"生成列联合唯一"方案——保软删语义纯粹与索引简单（方案 A 定案，2026-06-09）。`bx_menu.perms` 无 DB 唯一索引，按启用态校验。
 - 字段命名 snake_case；金额用整型分或 decimal；状态用 tinyint + 字典。
 
 ### 5.2 PHP
 - 命名空间沿用 TP8：`app\admin`、`app\api`、`app\common`。
 - 类命名 PascalCase：`XxxController` / `Xxx`(Model) / `XxxService` / `XxxValidate`。
 - **基类前缀 `Bx`**：`BxController` / `BxModel` / `BxService` / `BxValidate`，统一收口响应、软删除、租户作用域。
+- **基类职责（M1-C 黄金样板落地，后续模块与 M3 生成器一律复刻）**：
+  - `BxController`：`success()` / `fail()` / `paginate()` 统一响应 + `pageParam()`（page≥1、page_size 默认 15 上限 100）。控制器只做"参数编排 → 调 Service → 返回"，不写业务与查询。
+  - `BxModel`：软删 `deleted_at` + 时间戳 + 租户全局作用域 `globalScope=['tenant']`（单租户为空操作，钩子已接通）+ `currentTenantId()`；敏感字段用 `hidden`（如 `password`）兜底剔除。
+  - `BxService`：业务逻辑 + 事务（`Db::transaction` 包裹跨表写）+ 字段白名单（`fillable` 二次拦截，与 Validate 双重把关）。
+  - `BxValidate`：场景化——`sceneCreate`（必填）、`sceneUpdate`（`remove()` 去必填，配合 `$request->has()` 选择性更新）、`sceneStatus/Password/Assign*` 等。
+  - 异常分工：`ValidateException`（入参校验，400xxx）/ `BusinessException`（业务规则，422xxx）/ `AuthException`（认证，401xxx）统一接入全局 Handle，不泄露堆栈。
 
 ### 5.3 文件注释头（强制，生成器也按此产出）
 **PHP：**
@@ -202,7 +210,7 @@ benxin-admin-web/src/
 
 ### 6.3 路由与分页
 - 后台 `/admin/v1/...`，C 端 `/api/v1/...`（多应用前缀 + 路由分组版本）。
-- 分页统一：`data: { list: [], total, page, page_size }`。
+- 分页统一：`data: { list: [], total, page, page_size }`；**page≥1、page_size 默认 15、上限 100**（`BxController::pageParam()` 收口）。
 - 路由顺序约定：**具体 action > `/:id` > 集合**；更新用 `$request->has()` 判断字段是否参与更新。
 
 ---
@@ -212,6 +220,8 @@ benxin-admin-web/src/
 - access token 短期（建议 2h）、refresh 长期（建议 14d）；refresh 白名单与登出黑名单（jti）存 Valkey，至 exp 过期。
 - **Casbin RBAC**：model 预留 domain（= tenant_id）维度，单租户时使用统一 domain。权限粒度到接口/按钮。
 - C 端懒登录；登录即注册，微信 + 手机号缺一不可。
+- **后台登录契约（M1 定稿，前端据此对接）**：`POST /admin/v1/login` → `{ access_token, refresh_token, token_type:"Bearer", expires_in, refresh_expires_in }`；刷新 `POST /admin/v1/refresh`、登出 `POST /admin/v1/logout`。
+- **profile 契约**：`GET /admin/v1/profile` → `{ user, roles, menus, perms }`，即前端动态路由 + 按钮权限的数据源。`menus` 为目录/菜单类型树（节点含 name/title/path/component/icon/sort 与 children，自动补全祖先目录保证树连通），`perms` 为按钮权限串数组，**与后端 Casbin enforce 同源**。超管（含 super_admin）返回全量启用菜单树 + 全量 perms。菜单停用时同步移出 `menus` 与 `perms`。
 
 ---
 
@@ -290,7 +300,7 @@ benxin-admin-web/src/
 | **M1-A** | 认证基建（核心表+种子 / lcobucci JWT 双令牌 / BxJwt / JwtAuth 中间件 / 后台登录·刷新·登出·profile 闭环） | ✅ 已完成 |
 | **M1-B** | php-casbin（domain=tenant_id、bx_casbin_rule 适配器、CasbinAuth 中间件、超管通配策略启用） | ✅ 已完成 |
 | **M1-C** | 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满；profile 补全菜单+权限点聚合） | ✅ 已完成 |
-| M1-D | 部门/岗位 CRUD + 数据权限 + 与 web 登录全流程联调 | ⚪ 未开始 |
+| **M1-D** | 部门/岗位 CRUD + 数据权限(data_scope) + 与 web 登录全流程联调 + 自助改密 | ✅ 已完成（待 PM 做 M1 整体收口） |
 | M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
 | M4 | 通用业务（内容/支付/消息/微信配置） | ⚪ 未开始 |
@@ -309,13 +319,15 @@ benxin-admin-web/src/
 
 > M1-B 落地（2026-06-09，server 仓 commit e705158，GitHub+Gitee dev 双推）：casbin/casbin v0.2.1 集成。Model 采用 **rbac_with_domains 含 g**（实测 DefaultRoleManager 对 sub==p.sub 自反命中，无 g 策略时角色仍直接匹配自身 p 策略，故保留 g 维度供未来角色继承）。**自建 `app/common/library/BxCasbinAdapter`**（loadPolicy/savePolicy/addPolicy/removePolicy/removeFilteredPolicy，直读写 bx_casbin_rule，ORM 参数化）+ `app/common/service/CasbinService` 单例工厂（enforce/enforceAny/addPolicyForRole/removePolicyForRole/reload）。`app/admin/middleware/CasbinAuth` 挂载顺序 JwtAuth→CasbinAuth，所需权限走**路由显式声明** `->middleware(CasbinAuth::class, 'system:模块:动作')`，拒绝返回 **403000 + HTTP 403**。验证矩阵 6/6 通过（超管通配放行 / 无策略 403 / 加策略放行 / 删策略 403 / domain=1 拒绝 dom=0 请求 / 中间件顺序）。**bx_casbin_rule 字段映射固化**：p 策略 v0=角色code、v1=dom(tenant_id)、v2=perms 串、v3=act（普通统一 `do`、超管 `*`）；g 关系 v0=子、v1=父、v2=dom（本步未灌）。策略缓存本步未做（数据量小、php -S 每请求重建 Enforcer，DB 写入即时生效），列为常驻进程（fpm/swoole）下后续优化项。探针 `GET /admin/v1/_perm_probe` 仅 APP_DEBUG=true 注册（+ Probe 控制器 + TesterSeeder），生产不暴露，留作回归载体。已知项：旧 `app/common/middleware/CasbinAuth` 占位透传保留给 api guard/M5。
 
-> M1-C 落地（2026-06-09，server 仓 dev 双推；分 C-1/C-2/C-3 三 commit）：**黄金样板核心**，后续 CRUD（M1-D/M2/M3 生成器）均以此为唯一参照。
-> · **范式夯实**：四件套各司其职——控制器只编排参数→调 Service→返回；Service 承载业务+事务+字段白名单；Model 软删/时间戳/**租户全局作用域 globalScope=['tenant']**（单租户空操作，已接通）；Validate 场景化（create 必填、update 经 `remove()` 去必填配合 `$request->has()`）。BxController 增 `pageParam`（page_size 默认 15 上限 100）。新增 **BusinessException → 422xxx** 接入全局 Handle。
-> · **菜单 CRUD**（C-1，commit 3a405e5）：tree/详情/增/改/删/状态切换；按钮必有 perms 且无 path/component、perms 同租户唯一、改父防自指与成环；删除有子拒绝，事务清 bx_role_menu + 按 perm 清 casbin + reload。
-> · **角色 CRUD + 分配菜单**（C-2，commit 6bd17a3）：列表/详情(含 menu_ids)/增/改/删/状态 + GET|PUT `roles/:id/menus`。**分配 = 覆盖式同步**：事务内覆盖 bx_role_menu + `removeAllForRole`→逐 perm `addPolicyForRole`（适配器同连接，随 `Db::transaction` 回滚，`finally reload` 资治内存），含非法 menu 整单回滚不留半套策略。super_admin 不可删/停/改 code/分配菜单；删角色校验管理员绑定。
-> · **管理员 CRUD + profile 聚合**（C-3，见本批次提交）：列表/详情(role_ids/post_ids，永不含 password)/增(Argon2id+事务写关联)/改(选择性，密码走专用接口)/删/状态/重置密码。**超管护栏**：超管账号或含 super_admin 角色者不可删/停/被移除 super_admin 角色；禁止删/停当前登录者自己。profile 升级为 `{user,roles,menus(树),perms}`——普通管理员按其启用角色 role_menu 并集（menus 取目录/菜单且启用可见并补全祖先建树，perms 取启用菜单非空 perms 去重），超管直接全量；菜单 status 停用则同时移出 menus 与 perms。
-> · **唯一性 × 软删**：role.code / admin.username 唯一校验含 `withTrashed`（DB 唯一索引 uk_* 不区分软删，已删 code/username 不可复用，提前拦 422 避免落库 500；复用需 M2 回收站/彻底删除）。菜单 perms 无 DB 唯一索引，按启用态校验。
-> · **自测**：C-1 菜单 10+ 项、C-2 角色 16/16、C-3 管理员 22/22 全绿（含端到端：受限角色账号 menus/tree 放行、roles 新增 403000）。已知/偏差：① 自助改密接口（验旧密码）本步未做，留 profile 域后续；② 越权/护栏均为 422（业务）或 403000（鉴权），不泄露细节。
+> M1-C 落地（2026-06-09，server 仓 C-1 3a405e5 / C-2 6bd17a3 / C-3 d6e25c7，GitHub+Gitee dev 双推）：黄金样板核心三批落地。**四件套基类职责固化**（见 §5.2）：BxController(success/fail/paginate/pageParam)、BxModel(软删+时间戳+租户 globalScope+hidden)、BxService(业务+事务+fillable 白名单)、BxValidate(场景化)；新增 `BusinessException`→422xxx 接入 Handle。**菜单 CRUD**：tree 内存建树、按钮必有 perms 且唯一、改父防自指/成环、删除有子拒绝 + 事务清 role_menu + 按 perm 清 casbin + reload。**角色 CRUD + 分配菜单**（核心授权链路）：`PUT roles/:id/menus` 事务内覆盖 bx_role_menu → removeAllForRole → 逐 perm addPolicyForRole → finally reload；非法 menu_id 整单回滚不留半套策略（BxCasbinAdapter 用默认连接同入 Db::transaction）；super_admin 不可删/停/改 code/分配菜单(422)；角色有管理员绑定则拒删。**管理员 CRUD**：超管护栏(admin 账号/super_admin 角色不可删·停·降权) + 自我保护(不可删/停当前登录者)；password 走独立改密接口、hidden 兜底剔除；关联覆盖式事务写。**profile 升级**为 `{user, roles, menus, perms}`（契约见 §7），普通管理员按角色聚合并自动补全祖先目录、超管全量、菜单停用同步移出 menus+perms。安全基线 §6/§8 全勾选，权限端到端越权 403000 验证通过。
+> **样板取舍定案（2026-06-09，M1-C 后）**：① 软删唯一键**不可复用**（方案 A，已固化入 §5.1）；② 数据权限模型**升为 ADR-9**（data_scope 五档 + 递归 CTE 子树 + bx_role_dept 自定义）；③ 自助改密接口并入 M1-D。三项已写入 M1-D 任务书。
+
+> M1-D 落地（2026-06-09，server 仓 D-1 ef7e8ae / D-2 fcc5a74、web 仓 d24afff，双仓 dev 双推）：**M1 收官**。
+> · **部门 CRUD**（复刻菜单树样板）：tree 内存建树、改父防自指/成环、删除护栏（有子部门 / 有管理员挂靠 `bx_admin.dept_id` 拒绝 422）；附 `DeptService::descendantIds`（MySQL8 `WITH RECURSIVE`，参数化）。
+> · **岗位 CRUD**（复刻角色样板）：标准 CRUD、code 唯一含 withTrashed、删除有管理员绑定（`bx_admin_post`）拒绝 422。
+> · **自助改密** `PUT /admin/v1/password`（仅 JwtAuth）：验旧密码失败 422 统一文案、新密码 Argon2id；**改密后强制重登**（拉黑当前 access + 撤销 refresh）。与 `/admins/:id/password`（重置他人）区分。
+> · **数据权限（ADR-9）**：迁移 `bx_role_dept`；`DataScope` 常量；`DataScopeService::resolve` 多角色取最宽 + `applyTo` 拼 `deptField IN (..) OR ownerField=adminId`；`BxService::applyDataScope` 作用域入口（业务表 `create_dept`/`create_by`，核心表 `dept_id`/`id`）；角色更新接收 `dept_ids`（data_scope=5 覆盖写 bx_role_dept，事务）。**bx_admin 列表示范全五档**，与软删/租户/超管护栏作用域叠加无冲突；自测 9/9（五档可见集合 DB 直算对拍 + 多角色 self∪custom + 软删叠加）。
+> · **web 登录闭环**（首次前端实质编码，benxin-admin-web）：登录→token(localStorage 持久化)→拉 profile→**动态路由**（menus 树经 `import.meta.glob` 映射组件、未实现页回退 Placeholder、守卫 addRoute 重建、hash history）→**v-permission** 按钮级显隐（perms 与后端 enforce 同源）→登出；axios **401 单飞刷新**（401003 静默换 access 重试、并发只刷新一次；401001/401004 跳登录）。type-check + 生产构建均过。后端以浏览器同款 JSON 报文验证 login/profile/refresh/logout 契约全绿。已知项：① token 存 localStorage（注明 XSS 风险，后续可选 httpOnly cookie）；② 菜单 component 页面为占位（CRUD 页面后续里程碑/前端排期补齐）；③ 路由改用 hash history（避免 dev 重写配置，配合拦截器 hash 跳转）。
 
 ---
 
