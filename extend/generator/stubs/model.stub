@@ -1,0 +1,28 @@
+<?php
+// +----------------------------------------------------------------------
+// | @project   BenXinAdmin
+// | @mission   模型 — {{ moduleCn }} {{ table }}
+// | @author    仗键天涯(daxing)
+// | @email     3442535897@qq.com
+// | @date      {{ date }}
+// +----------------------------------------------------------------------
+
+declare(strict_types=1);
+
+namespace app\common\model;
+
+use app\common\base\BxModel;
+
+/**
+ * {{ moduleCn }}模型。
+ */
+class {{ ModuleName }} extends BxModel
+{
+    protected $name = '{{ tableName }}';
+
+    protected $hidden = [{{ hidden }}];
+
+    protected $type = [
+{{ typeCasts }}
+    ];
+}

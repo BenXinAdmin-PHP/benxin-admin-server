@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.10 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v2.1 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -34,6 +34,7 @@
 | ADR-7 | 缓存选型 | **Valkey（BSD）** 为默认，规避 Redis 8 的 AGPLv3 争议；协议兼容，PHP 客户端无缝 |
 | ADR-8 | M1 JWT 库选型 | 用 **lcobucci/jwt**（BSD-3，支持 PHP 8.2~8.5）作底层令牌库，**自建 `BxJwt` 服务层**承载双 guard / 双令牌 / Valkey 白黑名单。不用 firebase/php-jwt（太底层），不用 thans·xiaodi 等 TP 全家桶中间件（其黑名单偏 SSO 单点语义、逻辑藏第三方包不利于黄金样板复刻与长期可控）。签名算法 **HS256 起步**，双 guard 各自独立 secret 入 `.env`（`JWT_ADMIN_SECRET` / `JWT_API_SECRET`，≥32 字节随机）；未来需跨服务校验再平滑切 RS256。Casbin 仅负责 RBAC，JWT 库不碰权限 |
 | ADR-9 | 数据权限模型（M1-D） | `data_scope` 范围枚举 **1 全部 / 2 本部门 / 3 本部门及以下 / 4 仅本人 / 5 自定义**；多角色取**最宽**（任一为全部则全部；否则各角色 dept 可见集合求并集；全为仅本人才限本人）。"本部门及以下"用 MySQL8 **递归 CTE** 实时查子树（零冗余、移动部门免维护路径）；自定义范围存关联表 **`bx_role_dept`**。过滤注入点为 `BxModel`/`BxService` 的**数据范围作用域**，模块**按需开启**（非全局强制）。业务表启用数据权限须带 `create_by`(+可选 `create_dept`)；核心表 `bx_admin` 用自身 `dept_id`、"仅本人"用 `id`。M1-D 在 `bx_admin` 列表上示范全五档 |
+| ADR-10 | M3 生成器技术选型 | ① 模板引擎用 **stub 文件 + 占位符替换**（模板即黄金样板代码、可读易维护，stub 由 M1/M2 已沉淀样板抽取）；② 输入源 = **表结构（information_schema 反读字段）+ 模块元数据**（中文名 / perms 前缀 / 是否树形 / 是否挂数据权限 / 字段属性：列表显示·查询条件·必填·敏感）；③ 产物**分阶段**——M3 先**后端四件套**(Model/Controller/Service/Validate)+ 路由 + 菜单 perms seeder，前端产物与 migration 后续；④ 形态 = **CLI 命令**（`php think bx:make` 风），可视化界面后续；⑤ 生成安全：默认**不覆盖**已存在文件 + `--force`；⑥ 首个复刻目标 = **post 纯 CRUD**（验证"生成 == 手写黄金样板"保真），再扩树形(dept/menu)、授权(role)。生成产物**严格复刻 §5/6/7/8 注释头与全部范式**（ADR-6） |
 
 ---
 
@@ -305,8 +306,11 @@ benxin-admin-web/src/
 | **M2-A** | 字典管理（bx_dict 类型 + bx_dict_data 数据项 + 取数接口 + 缓存） | ✅ 已完成 |
 | **M2-B** | 参数配置（bx_config CRUD + 分组 + 敏感值 AES 入库 + 缓存） | ✅ 已完成 |
 | **M2-C** | 操作日志 + 登录日志（RequestLog 中间件自动记录 + 接入登录流） | ✅ 已完成 |
-| **M2-D** | 文件管理（bx_file 上传 + 本地驱动起步 + OSS/七牛抽象、密钥 AES；首次落地 create_by/create_dept + BxModel 自动填充钩子） | ✅ 已完成（M2 收官，待 PM 整体收口） |
-| M3 | 代码生成器 | ⚪ 未开始 |
+| **M2-D** | 文件管理（bx_file 上传 + 本地驱动起步 + OSS/七牛抽象、密钥 AES；首次落地 create_by/create_dept + BxModel 自动填充钩子） | ✅ 已完成 |
+| **M3-A** | 生成器骨架（CLI `bx:make` + 表结构读取 + 元数据收集 + stub 引擎）+ 纯 CRUD 复刻（以 post 验证保真） | 🔵 进行中（任务书已下发 Claude Code） |
+| M3-B | 树形模块复刻（dept/menu 范式） | ⚪ 未开始 |
+| M3-C | 带授权链路复刻（role：分配菜单 + casbin 同步） | ⚪ 未开始 |
+| M3-D | 前端产物生成（列表/表单/API 调用文件，与前端排期对齐） | ⚪ 未开始 |
 | M4 | 通用业务（内容/支付/消息/微信配置） | ⚪ 未开始 |
 | M5 | C 端 uni-app（登录/首页/我的，懒登录） | ⚪ 未开始 |
 | M6 | （可选）官网 + 首页拖拽搭建 | ⚪ 未开始 |
@@ -338,9 +342,11 @@ benxin-admin-web/src/
 
 > M2-C 落地（2026-06-09，server 仓 commit 4324e06，GitHub+Gitee dev 双推）：**操作日志 + 登录日志**。新增 `bx_oper_log`（admin_id/username/method/path/perm/ip/ua/request_body/response_code/http_status/duration_ms/request_id）+ `bx_login_log`（username/admin_id/ip/ua/status/msg/request_id），**两表仅 created_at、不软删/不挂租户作用域**（Model 直接继承 think\Model）。**RequestLog 中间件**（全局最外层）扩展自动记录：仅记写方法（POST/PUT/DELETE/PATCH）、GET 跳过；$next 返回后读 JwtAuth 注入的 adminId + CasbinAuth 注入的 requiredPerm，捕获最终 code/耗时；全程 try/catch 吞错（失败仅 Log::error）。**登录日志**接入 AuthService::login（成功 status=1 / 失败 status=0 统一文案不区分账号不存在与密码错、失败也记 IP）。**脱敏红线 `app/common/library/LogSanitizer`**：黑名单（password/old_password/new_password/confirm_password/access_token/refresh_token/token）+ 语义正则（pass/secret/token/credential/api_key/app_secret）+ /configs 写接口额外打码 value，递归遍历嵌套 body 命中键整体替换 ******；改密/敏感配置/登录三处实测 request_body 无明文。查询/清理接口：oper-logs/login-logs list+detail+清理；**清理防裸 DELETE 全表**（需 start_time/end_time 或显式 all=1，否则 422）。日志故障不拖垮主流程（RENAME TABLE 模拟写失败 → 主接口仍 code0/200）。LogMenuSeeder 幂等：操作日志/登录日志菜单 + `system:operlog:list|delete`/`system:loginlog:list|delete`（菜单 36→42）。14/14 自测全绿。已知项：① 日志同步轻量写，异步队列(think-queue)列高并发后续；② 日志分区/归档/定时清理列运维后续。**运维经验**：本机 Docker Desktop 异常关闭后，MySQL 容器因**残留 socket lock 文件**陷入重启循环；`docker compose down && up -d` 重建容器即修复，**命名数据卷 `benxin-mysql-data` 保留、表与数据完好**（印证幂等种子 + 命名卷的零损失设计）。
 
-> M2-D 落地（2026-06-10，server 仓 dev 双推）：**文件管理 + M2 收官**。① **BxModel 自动填充钩子**（`onBeforeInsert`）：表含 `create_by`/`create_dept` 列且登录态 → 自动写 adminId/dept_id（`getTableFields()` 判列、入参已给不覆盖）；**CLI/seeder/未认证安全跳过**（实测无登录 insert 不报错、值默认 0）。§5.1 钩子首落，后续带这两列的业务表（含 M3 生成器产物）即开即用 ADR-9。② 迁移 `bx_file`（含 create_by/create_dept + 软删）+ File 模型。③ **存储抽象 `app/common/library/storage`**：`StorageInterface`(put/url/delete) + **LocalStorage**（存项目根 `storage/`，**public 之外、Web 不可直链/执行**，经后端 `GET /files/:id/raw` 受控下载）+ Oss/Qiniu 骨架(TODO) + StorageManager 工厂（驱动取 bx_config `storage_driver`，云 AK/SK 经 `ConfigService::get` 敏感 AES，复用 M2-B）。④ **上传安全（§8 硬指标）**：大小上限 + **finfo 真实 MIME** + 扩展名白名单 + **MIME/扩展名双重校验**（实测 `.php`、php 改名 `.jpg` 均被拒）+ **uuid 重命名**（禁原名，防穿越/覆盖/可执行落地）+ 非 Web 目录。⑤ **ADR-9 数据权限在真业务表首示范**：`GET /files` 挂 `applyDataScope($q,$admin,'create_dept','create_by')`，实测两部门账号各只见本部门文件、超管见全部。⑥ 删除软删记录、**物理文件保留**（GC 后续）。⑦ 种子：文件管理菜单 + `system:file:list|upload|delete`（菜单 42→46）。自测 17/18（唯一未达项：超大文件本机 php.ini `post_max_size=8M` 在 PHP 层先拒、未触达 app 层 10MB 守卫——安全成立[不入库]，干净 app 层 422 需 php.ini 调到 ≥app 限额，即"需匹配"约定）。已知项：物理文件 GC/秒传/缩略图、云驱动实现列后续。
+> M2-D 落地（2026-06-09，server 仓 commit cf4a079，GitHub+Gitee dev 双推）：**文件管理 + M2 收官**。新增 `bx_file`（create_by/create_dept + original_name/file_name/path/mime/ext/size/storage/hash/url + 软删）。**BxModel 自动填充钩子 `onBeforeInsert`**（首落点）：`getTableFields()` 判断表含 create_by/create_dept 列 → 登录态自动写 adminId/dept_id、入参显式给出则不覆盖、`adminId<=0`(CLI/seeder/未认证)或异常 try/catch 安全跳过。**存储抽象 `app/common/library/storage`**：`StorageInterface`(put/url/delete) + `LocalStorage`（存项目根 `storage/`、public 之外不可直链执行、realpath 防穿越）+ OssStorage/QiniuStorage 骨架（throw 未实现 + TODO）+ `StorageManager::driver()`（驱动名取 bx_config `storage_driver` 默认 local、云 AK/SK 经 ConfigService::get 敏感 AES 注入）。**上传安全（§8 硬指标）**：app 层大小上限 + **finfo 真实 MIME**（不信任客户端）+ 扩展名白名单 + **MIME/ext 双重校验**（.php 拒、php 改名 .jpg 拒）+ uuid 重命名禁原名（防穿越/覆盖/可执行）+ 落非 Web 目录 + 受控下载 `GET /files/:id/raw`。**ADR-9 真业务表首示范**：bx_file 列表挂 `applyDataScope(create_dept, create_by)`，两部门 data_scope=2 账号对拍各见本部门、超管见全部（与 M1-D 在 bx_admin 用 dept_id/id 互补）。FileMenuSeeder 幂等：文件管理菜单 + `system:file:list|upload|delete`（菜单 42→46）。删除＝软删记录、物理文件保留（GC 后续）。17/18 自测（唯一未达 app 层 422 的"超大文件"因本机 php.ini post_max_size=8M 在 PHP 层先拒、更安全不入库，属环境约定）。已知项：① 生产需把 upload_max_filesize/post_max_size 调 ≥ app 限额才走 app 层 422；② 物理文件 GC / 秒传去重 / 缩略图 / 受控下载流式输出 / OSS·七牛实现 列后续。
 
-> **M2 收官（2026-06-10）**：系统管理五块闭环——字典(A)/参数配置+敏感 AES(B)/操作+登录日志(C)/文件管理(D)。新沉淀可复用基建：`BxCache`(读回填/写失效)、`ConfigCrypt`(AES+脱敏)、`LogSanitizer`(日志脱敏)、`BxModel` 自动填充钩子(create_by/create_dept)、`StorageInterface` 存储抽象；ADR-9 数据权限已在真业务表 bx_file 跑通。黄金样板 + 这些基建即 **M3 代码生成器**的复刻目标。
+> **M2 收官（2026-06-09，server 仓 dev）**：系统管理五块全闭环——字典(A) / 参数配置+敏感 AES(B) / 操作+登录日志(C) / 文件管理(D)。**新沉淀可复用基建**：`BxCache`(读回填/写失效)、`ConfigCrypt`(AES-256-CBC + 脱敏)、`LogSanitizer`(日志脱敏)、`BxModel` 自动填充钩子(create_by/create_dept)、`StorageInterface`(存储抽象)；ADR-9 数据权限已在真业务表 bx_file 跑通。**黄金样板要素齐备**（四件套基类 / CRUD 七动作 / 路由范式 / 树形 / 授权链路 / 数据权限 / 缓存 / 日志脱敏 / 上传安全），M3 代码生成器据此复刻。下一步 M3 进入设计评审（生成器技术选型）。
+
+> **M3 启动约定（2026-06-09）**：生成器技术选型定案为 **ADR-10**——stub + 占位符 / 表结构+元数据输入 / 后端四件套+路由+seeder 产物(前端与 migration 后续) / CLI 命令形态 / 默认不覆盖+--force / 首个复刻目标 post 纯 CRUD。M3 拆 **A→B→C→D**：A 生成器骨架 + 纯 CRUD 复刻（post 保真验证）→ B 树形(dept/menu) → C 授权链路(role + casbin 同步) → D 前端产物。M3-A 任务书已下发。
 
 ---
 

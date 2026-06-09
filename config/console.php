@@ -5,5 +5,7 @@
 return [
     // 指令定义
     'commands' => [
+        // 代码生成器（M3）：php think bx:make <table> [--config|--output|--force|--dry-run]
+        'bx:make' => \app\command\Make::class,
     ],
 ];
