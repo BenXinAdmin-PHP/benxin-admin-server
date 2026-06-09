@@ -102,6 +102,16 @@ Route::group('v1', function () {
         Route::delete('configs/:id', 'Config/delete')->middleware(CasbinAuth::class, 'system:config:delete')->pattern(['id' => '\d+']);
         Route::get('configs', 'Config/index')->middleware(CasbinAuth::class, 'system:config:list');
         Route::post('configs', 'Config/save')->middleware(CasbinAuth::class, 'system:config:create');
+
+        // 操作日志（只读 + 清理；perm: system:operlog:*）
+        Route::get('oper-logs/:id', 'OperLog/read')->middleware(CasbinAuth::class, 'system:operlog:list')->pattern(['id' => '\d+']);
+        Route::get('oper-logs', 'OperLog/index')->middleware(CasbinAuth::class, 'system:operlog:list');
+        Route::delete('oper-logs', 'OperLog/clear')->middleware(CasbinAuth::class, 'system:operlog:delete');
+
+        // 登录日志（只读 + 清理；perm: system:loginlog:*）
+        Route::get('login-logs/:id', 'LoginLog/read')->middleware(CasbinAuth::class, 'system:loginlog:list')->pattern(['id' => '\d+']);
+        Route::get('login-logs', 'LoginLog/index')->middleware(CasbinAuth::class, 'system:loginlog:list');
+        Route::delete('login-logs', 'LoginLog/clear')->middleware(CasbinAuth::class, 'system:loginlog:delete');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----

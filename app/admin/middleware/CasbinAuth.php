@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 10:00:00
+// | @updated   2026-06-10 18:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -30,6 +31,9 @@ class CasbinAuth
 {
     public function handle(Request $request, Closure $next, string $perm = ''): Response
     {
+        // 记录该路由声明的所需权限，供操作日志采集
+        $request->requiredPerm = $perm;
+
         // 未声明所需权限的路由不做权限拦截（仅认证即可）
         if ($perm === '') {
             return $next($request);

@@ -17,6 +17,9 @@ use app\common\exception\AuthException;
 use app\common\exception\BusinessException;
 use app\common\library\BxJwt;
 use app\common\model\Admin;
+use app\common\model\LoginLog;
+use think\facade\Log;
+use Throwable;
 
 /**
  * 后台认证服务：收口登录、刷新、登出三段逻辑，控制器只做参数与响应。
@@ -41,6 +44,8 @@ class AuthService extends BxService
 
         // 账号不存在 / 已禁用 / 密码错误，统一返回 null，文案不区分（防枚举）
         if ($admin === null || !password_verify($password, (string) $admin->password)) {
+            // 登录失败日志（统一文案，不泄露账号是否存在）
+            $this->writeLoginLog($username, 0, 0, '账号或密码错误');
             return null;
         }
 
@@ -49,10 +54,34 @@ class AuthService extends BxService
         $admin->last_login_ip = $ip;
         $admin->save();
 
+        $this->writeLoginLog($username, (int) $admin->id, 1, '登录成功');
+
         return [
             'admin'  => $admin,
             'tokens' => $this->issueTokens($admin),
         ];
+    }
+
+    /**
+     * 写登录日志。try/catch 吞错——日志故障不影响登录主流程。
+     */
+    protected function writeLoginLog(string $username, int $adminId, int $status, string $msg): void
+    {
+        try {
+            $req = request();
+            LoginLog::create([
+                'tenant_id'  => 0,
+                'username'   => mb_substr($username, 0, 64),
+                'admin_id'   => $adminId,
+                'ip'         => $req->ip(),
+                'user_agent' => mb_substr((string) $req->header('user-agent', ''), 0, 512),
+                'status'     => $status,
+                'msg'        => $msg,
+                'request_id' => (string) ($req->request_id ?? ''),
+            ]);
+        } catch (Throwable $e) {
+            Log::error('[login_log] record failed: ' . $e->getMessage());
+        }
     }
 
     /**

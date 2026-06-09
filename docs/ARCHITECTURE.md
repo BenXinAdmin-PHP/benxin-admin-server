@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.8 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v1.9 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -304,7 +304,7 @@ benxin-admin-web/src/
 | **M1-D** | 部门/岗位 CRUD + 数据权限(data_scope) + 与 web 登录全流程联调 + 自助改密 | ✅ 已完成 |
 | **M2-A** | 字典管理（bx_dict 类型 + bx_dict_data 数据项 + 取数接口 + 缓存） | ✅ 已完成 |
 | **M2-B** | 参数配置（bx_config CRUD + 分组 + 敏感值 AES 入库 + 缓存） | ✅ 已完成 |
-| M2-C | 操作日志 + 登录日志（RequestLog 中间件自动记录 + 接入登录流） | ⚪ 未开始 |
+| **M2-C** | 操作日志 + 登录日志（RequestLog 中间件自动记录 + 接入登录流） | ✅ 已完成 |
 | M2-D | 文件管理（bx_file 上传 + 本地驱动起步 + OSS/七牛抽象、密钥 AES；首次落地 create_by/create_dept + BxModel 自动填充钩子） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
 | M4 | 通用业务（内容/支付/消息/微信配置） | ⚪ 未开始 |
@@ -334,7 +334,9 @@ benxin-admin-web/src/
 
 > M2-A 落地（2026-06-09，server 仓 commit 2107fc5，GitHub+Gitee dev 双推）：**字典管理**复刻黄金样板。新增 `bx_dict`（type 唯一 withTrashed）+ `bx_dict_data`（dict_type 关联、(dict_type,value) 同类型唯一 withTrashed、list_class/is_default）。DictSeeder 幂等增量：「字典管理」菜单 + `system:dict:*` 4 perms（菜单 26→31），示例字典 `sys_normal_disable`(正常1/停用0) + `sys_yes_no`。类型/数据项 CRUD 共用 `system:dict:*`；类型删除事务级联软删数据项；**改 type 名时数据项 dict_type 同事务跟随迁移**（主从一致无孤儿）。**取数接口** `GET /admin/v1/dicts/type/:type`（路由排 `/:id` 前）+ **缓存通用能力**：key `bx:dict:data:{type}`、只缓存启用项、读回填 + 写失效（改名清新旧 key）、兜底 TTL 86400。17/17 自测全绿。已知项：① 字典前端页面随前端排期补（菜单已就位，动态路由回退占位页）；② 字典为系统配置表，不加 create_by/不做数据权限。**对 M2-B 建议**：缓存 helper 建议从 DictDataService 抽成可复用 trait/类供参数配置复用；bx_config（M0 已建，group/key/value/remark + 唯一 (tenant_id,group,key)）直接做 CRUD 无需新表，新增点为 §9 敏感值 AES 加密入库（需加解密 helper 放 app/common/library）。
 
-> M2-B 落地（2026-06-10，server 仓 dev 双推）：**参数配置** + 敏感值加密 + 缓存抽件。① **缓存抽件 `app/common/library/BxCache`**（`remember($key,$ttl,$producer)`/`forget`/`store`，走 Valkey），DictDataService 改用并回归 M2-A 取数/失效不回退。② **加解密 `app/common/library/ConfigCrypt`**：AES-256-CBC、随机 IV、存 `base64(iv+cipher)`，密钥取 `.env CONFIG_CRYPT_KEY` 经 SHA-256 规整 32 字节，`decrypt` 失败安全降级返回空串，`mask` 脱敏（前后各 2 位 + `****`，过短全 `******`）。③ **bx_config 增列** name/is_sensitive/value_type/sort（value 沿用 text 容密文）。④ **配置 CRUD**：(group,key) 唯一含 withTrashed；敏感项 value 加密入库、HTTP 列表/详情/分组**脱敏返回**（绝不回明文/密文）；**更新提交脱敏占位＝未改则不更新该字段**（保留原密文），传新值才重新加密，切换 is_sensitive 时原明文按新形态转换。⑤ **取数双形态**：HTTP `GET /admin/v1/configs/group/:group`（脱敏，排 `/:id` 前）；内部 `ConfigService::get($key)/getGroup($group)` 返回**明文**（供业务取微信 secret 等）。⑥ **缓存** `bx:config:all` 缓存全部原始库值（敏感=密文，**Valkey 实测无明文**），写操作整体失效，兜底 TTL 1 天。⑦ 种子：参数配置菜单 + `system:config:*` 4 perms + 敏感示例 `wechat/mp_app_secret`（占位假串加密入库，**不放真实密钥**）。自测 20/20（含 M2-A 回归）；`CONFIG_CRYPT_KEY` 已入 .env（≥32 字节，未入仓库），.env.example 占位 + 提示。已知项：① 配置前端页面随前端排期补；② 缓存采用单聚合键 `config:all`（任务建议的 `config:group:{type}` 等价简化，config 体量小、单键失效更省心）；③ `get($key)` 要求 key 跨分组唯一（未命中返回默认值）。
+> M2-B 落地（2026-06-09，server 仓 commit 2d9e3f5，GitHub+Gitee dev 双推）：**参数配置**。bx_config 增列 `name`/`is_sensitive`/`value_type`/`sort`（value 沿用 text 容纳密文）。**缓存抽件 `app/common/library/BxCache`**（remember/forget/store，走 Valkey），DictDataService 改用并回归不回退。**加解密 `app/common/library/ConfigCrypt`**：AES-256-CBC、随机 IV、存 `base64(iv+cipher)`、密钥取 .env `CONFIG_CRYPT_KEY` 经 **SHA-256 规整为 32 字节**、decrypt 失败降级空串、`mask` 脱敏（前后各 2 位+****）；GCM 切换点已在类注释标注。配置 CRUD：敏感项加密入库、HTTP 一律脱敏回显、**更新提交脱敏占位则不更新原值**（防误清）、切换 is_sensitive 转换形态；(group,key) 唯一 withTrashed。取数双形态：HTTP `GET /admin/v1/configs/group/:group`（脱敏）+ 内部 `ConfigService::get($key)`/`getGroup($group)`（解密明文供业务调用）。**缓存单聚合键 `bx:config:all` 存原始库值（敏感=密文）**，写失效、TTL 86400，Valkey 实测无明文敏感值。种子：参数配置菜单 + `system:config:*` 4 perms + 敏感示例 `wechat/mp_app_secret`（占位假串、不放真实密钥）。已知项：① 缓存用单键 config:all（配置体量小的等价简化）；② `ConfigService::get($key)` 要求 key 跨分组唯一，**M4 多组同名 key 前需补 `getByGroupKey($group,$key)`**；③ 加密为 CBC（GCM 切换点已注释）。
+
+> M2-C 落地（2026-06-10，server 仓 dev 双推）：操作日志 + 登录日志，重心在**自动记录 + 脱敏红线 + 日志故障不影响主请求**。① 迁移 `bx_oper_log`/`bx_login_log`——**只增不改不软删**（仅 created_at），Model 直接继承 `think\Model`（关 updated_at/软删/租户作用域）。② **操作日志由 `RequestLog` 全局中间件自动记录**：仅写方法（POST/PUT/DELETE/PATCH），GET 不记；采集 method/path/perm/ip/ua/耗时/response_code/http_status/request_id + 操作人（JwtAuth 注入 adminId/adminUser）；perm 由 `CasbinAuth` 注入 `request->requiredPerm`；**全程 try/catch 吞错**（失败仅 Log::error，实测临时改表名时主接口仍 code0）。③ **脱敏红线 `app/common/library/LogSanitizer`**：黑名单（password/old_password/new_password/access_token/refresh_token/token）+ 语义正则（pass/secret/token/credential/api_key/app_secret）+ `/configs` 写接口额外打码 `value`，递归遍历嵌套；实测改密/敏感配置/登录的 request_body **无任何明文密码/密钥**。④ **登录日志接入 `AuthService::login`**：成功 status=1、失败 status=0（统一文案"账号或密码错误"，不泄露枚举），失败也记 IP，try/catch 吞错。⑤ 只读 + 清理：`GET /admin/v1/oper-logs[/:id]`、`/login-logs[/:id]`、`DELETE`（**需 start_time/end_time 或 all=1，防裸删全表**）；perm `system:operlog:*`/`system:loginlog:*`。⑥ 种子：两菜单 + 4 perms（菜单 36→42）。日志表**不挂 applyDataScope**（§5.1），记 admin_id 普通 where 筛选。自测 14/14（写记录/GET 不记/字段完整/脱敏红线/登录成功失败/写失败不影响主流程/清理防误清+范围生效/越权 403000）。已知项：① 同步轻量写，异步队列(think-queue)列高并发后续；② 分区/归档/定时清理列运维后续；③ 前端页面随排期补。
 
 ---
 
