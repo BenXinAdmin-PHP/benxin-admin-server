@@ -28,6 +28,8 @@ Route::group('v1', function () {
     Route::group(function () {
         Route::post('logout', 'Auth/logout');
         Route::get('profile', 'Auth/profile');
+        // 自助改密（改自己，不挂 CasbinAuth）；与 /admins/:id/password（重置他人）区分
+        Route::put('password', 'Auth/changePassword');
     })->middleware(JwtAuth::class);
 
     // ---- 系统管理 CRUD（需登录 + 按 perm 鉴权；JwtAuth → CasbinAuth）----
@@ -59,6 +61,22 @@ Route::group('v1', function () {
         Route::delete('admins/:id', 'Admin/delete')->middleware(CasbinAuth::class, 'system:admin:delete')->pattern(['id' => '\d+']);
         Route::get('admins', 'Admin/index')->middleware(CasbinAuth::class, 'system:admin:list');
         Route::post('admins', 'Admin/save')->middleware(CasbinAuth::class, 'system:admin:create');
+
+        // 部门（perm: system:dept:*）
+        Route::get('depts/tree', 'Dept/tree')->middleware(CasbinAuth::class, 'system:dept:list');
+        Route::put('depts/:id/status', 'Dept/status')->middleware(CasbinAuth::class, 'system:dept:update')->pattern(['id' => '\d+']);
+        Route::get('depts/:id', 'Dept/read')->middleware(CasbinAuth::class, 'system:dept:list')->pattern(['id' => '\d+']);
+        Route::put('depts/:id', 'Dept/update')->middleware(CasbinAuth::class, 'system:dept:update')->pattern(['id' => '\d+']);
+        Route::delete('depts/:id', 'Dept/delete')->middleware(CasbinAuth::class, 'system:dept:delete')->pattern(['id' => '\d+']);
+        Route::post('depts', 'Dept/save')->middleware(CasbinAuth::class, 'system:dept:create');
+
+        // 岗位（perm: system:post:*）
+        Route::put('posts/:id/status', 'Post/status')->middleware(CasbinAuth::class, 'system:post:update')->pattern(['id' => '\d+']);
+        Route::get('posts/:id', 'Post/read')->middleware(CasbinAuth::class, 'system:post:list')->pattern(['id' => '\d+']);
+        Route::put('posts/:id', 'Post/update')->middleware(CasbinAuth::class, 'system:post:update')->pattern(['id' => '\d+']);
+        Route::delete('posts/:id', 'Post/delete')->middleware(CasbinAuth::class, 'system:post:delete')->pattern(['id' => '\d+']);
+        Route::get('posts', 'Post/index')->middleware(CasbinAuth::class, 'system:post:list');
+        Route::post('posts', 'Post/save')->middleware(CasbinAuth::class, 'system:post:create');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----

@@ -87,4 +87,25 @@ class Auth extends BxController
 
         return $this->success((new ProfileService($this->app))->build($admin));
     }
+
+    /**
+     * 自助改密（改自己的密码，仅 JwtAuth，不挂 CasbinAuth）。改密后强制重登。
+     * PUT /admin/v1/password（需登录）
+     */
+    public function changePassword(): Response
+    {
+        validate(AuthValidate::class)->scene('changePwd')->check($this->request->param());
+
+        /** @var Admin $admin */
+        $admin = $this->request->adminUser;
+
+        (new AuthService($this->app))->changePassword(
+            $admin,
+            (string) $this->request->param('old_password', ''),
+            (string) $this->request->param('new_password', ''),
+            (array) $this->request->jwtClaims,
+        );
+
+        return $this->success(null, '密码已修改，请重新登录');
+    }
 }

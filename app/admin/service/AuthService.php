@@ -1,10 +1,11 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   服务 — 后台认证编排（登录/刷新/登出）
+// | @mission   服务 — 后台认证编排（登录/刷新/登出/自助改密）
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-06-09 18:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -13,6 +14,7 @@ namespace app\admin\service;
 
 use app\common\base\BxService;
 use app\common\exception\AuthException;
+use app\common\exception\BusinessException;
 use app\common\library\BxJwt;
 use app\common\model\Admin;
 
@@ -93,6 +95,25 @@ class AuthService extends BxService
     {
         BxJwt::blacklistAccess(self::GUARD, (string) ($claims['jti'] ?? ''), (int) ($claims['exp'] ?? 0));
         BxJwt::revokeRefresh(self::GUARD, $claims['rjti'] ?? null);
+    }
+
+    /**
+     * 自助改密：验旧密码（失败统一文案，不泄露）→ 新密码 Argon2id 写入 →
+     * 拉黑当前 access + 撤销当前 refresh，强制重登。
+     *
+     * @param array $claims JwtAuth 注入的当前 access claims
+     */
+    public function changePassword(Admin $admin, string $oldPassword, string $newPassword, array $claims): void
+    {
+        if (!password_verify($oldPassword, (string) $admin->password)) {
+            throw new BusinessException('原密码不正确');
+        }
+
+        $admin->password = password_hash($newPassword, PASSWORD_ARGON2ID);
+        $admin->save();
+
+        // 改密后强制重登：当前会话立即失效
+        $this->logout($claims);
     }
 
     /**
