@@ -50,6 +50,15 @@ Route::group('v1', function () {
         Route::delete('roles/:id', 'Role/delete')->middleware(CasbinAuth::class, 'system:role:delete')->pattern(['id' => '\d+']);
         Route::get('roles', 'Role/index')->middleware(CasbinAuth::class, 'system:role:list');
         Route::post('roles', 'Role/save')->middleware(CasbinAuth::class, 'system:role:create');
+
+        // 管理员（perm: system:admin:*；改密/分配角色复用 update）
+        Route::put('admins/:id/password', 'Admin/password')->middleware(CasbinAuth::class, 'system:admin:update')->pattern(['id' => '\d+']);
+        Route::put('admins/:id/status', 'Admin/status')->middleware(CasbinAuth::class, 'system:admin:update')->pattern(['id' => '\d+']);
+        Route::get('admins/:id', 'Admin/read')->middleware(CasbinAuth::class, 'system:admin:list')->pattern(['id' => '\d+']);
+        Route::put('admins/:id', 'Admin/update')->middleware(CasbinAuth::class, 'system:admin:update')->pattern(['id' => '\d+']);
+        Route::delete('admins/:id', 'Admin/delete')->middleware(CasbinAuth::class, 'system:admin:delete')->pattern(['id' => '\d+']);
+        Route::get('admins', 'Admin/index')->middleware(CasbinAuth::class, 'system:admin:list');
+        Route::post('admins', 'Admin/save')->middleware(CasbinAuth::class, 'system:admin:create');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----

@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-06-09 16:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -12,6 +13,7 @@ declare(strict_types=1);
 namespace app\admin\controller;
 
 use app\admin\service\AuthService;
+use app\admin\service\ProfileService;
 use app\admin\validate\AuthValidate;
 use app\common\base\BxController;
 use app\common\library\ErrorCode;
@@ -75,7 +77,7 @@ class Auth extends BxController
     }
 
     /**
-     * 当前管理员基本信息 + 角色 code 列表。
+     * 当前管理员聚合信息：user + roles + menus(树) + perms（前端动态路由 + 按钮鉴权契约）。
      * GET /admin/v1/profile（需登录）
      */
     public function profile(): Response
@@ -83,18 +85,6 @@ class Auth extends BxController
         /** @var Admin $admin */
         $admin = $this->request->adminUser;
 
-        return $this->success([
-            'id'            => (int) $admin->id,
-            'username'      => $admin->username,
-            'nickname'      => $admin->nickname,
-            'avatar'        => $admin->avatar,
-            'mobile'        => $admin->mobile,
-            'email'         => $admin->email,
-            'dept_id'       => (int) $admin->dept_id,
-            'status'        => (int) $admin->status,
-            'last_login_at' => $admin->last_login_at,
-            'last_login_ip' => $admin->last_login_ip,
-            'roles'         => $admin->roleCodes(),
-        ]);
+        return $this->success((new ProfileService($this->app))->build($admin));
     }
 }

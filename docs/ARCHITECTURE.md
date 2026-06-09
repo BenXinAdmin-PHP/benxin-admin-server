@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.2 ｜ **最后更新**：2026-06-08 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v1.3 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -289,7 +289,7 @@ benxin-admin-web/src/
 | **M0-C** | C 端脚手架（uniapp：uni-app+wot-design-uni+H5/微信小程序双端+ping 联调） | ✅ 已完成 |
 | **M1-A** | 认证基建（核心表+种子 / lcobucci JWT 双令牌 / BxJwt / JwtAuth 中间件 / 后台登录·刷新·登出·profile 闭环） | ✅ 已完成 |
 | **M1-B** | php-casbin（domain=tenant_id、bx_casbin_rule 适配器、CasbinAuth 中间件、超管通配策略启用） | ✅ 已完成 |
-| M1-C | 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满；profile 补全菜单+权限点聚合） | ⚪ 未开始 |
+| **M1-C** | 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满；profile 补全菜单+权限点聚合） | ✅ 已完成 |
 | M1-D | 部门/岗位 CRUD + 数据权限 + 与 web 登录全流程联调 | ⚪ 未开始 |
 | M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
@@ -307,7 +307,15 @@ benxin-admin-web/src/
 
 > M1-A 落地（2026-06-08，server 仓 commit 8661660，GitHub+Gitee dev 双推）：9 表（bx_admin/role/menu/dept/post + admin_role/role_menu/admin_post + casbin_rule，think-migration 无裸 SQL）+ AuthSeeder 幂等种子（部门/岗位/super_admin 角色/超管 admin 账号 Argon2id/菜单 26 条 [1 目录+5 菜单+20 按钮 perms]/Casbin 超管通配 `p,super_admin,0,*,*`）；lcobucci/jwt 5.6.0 自建 BxJwt 双 guard 双令牌（access 2h/refresh 14d），refresh 白名单 + 登出黑名单(jti) 落 Valkey；admin guard 登录/刷新/登出/profile 闭环，13/13 API 自测通过。错误码新增并固化 **401002 账号或密码错误**（防枚举统一文案，已补入 §6.2）。已知项：① 本地 PHP 8.2 经 --ignore-platform-req=php 安装 lcobucci（生产 8.4 无此项）；② **`.env` 注释内的 ASCII 圆括号会触发 TP Env 解析报错，注释一律用全角（）**；③ Valkey key 实际带 TP 全局前缀，形如 `bx:bxjwt:admin:wl:refresh:{jti}`(TTL 14d) / `bx:bxjwt:admin:bl:{jti}`(TTL≤access 剩余)；④ 旧 `app/common/middleware/JwtAuth` 占位透传保留给 api guard/M5，admin 实现为新建的 `app/admin/middleware/JwtAuth`；⑤ 按默认决策未加 is_super 逃生通道、refresh 不轮换（超管权限由 M1-B Casbin 通配承载）。
 
-> M1-B 落地（2026-06-09，server 仓 dev 双推）：casbin/casbin v0.2.1 + 自建 `BxCasbinAdapter`（读写 bx_casbin_rule 标准 ptype+v0..v5，ORM 参数化，实现 load/save/add/remove/removeFiltered）+ `CasbinService` 单例工厂（enforce / enforceAny / addPolicyForRole / removePolicyForRole / reload）。Model `config/casbin/rbac_model.conf` 用 rbac_with_domains，**matcher 含 g**：`g(r.sub,p.sub,r.dom) && r.dom==p.dom && keyMatch(r.obj,p.obj) && (r.act==p.act||p.act=="*")`——实测 DefaultRoleManager 对 sub==p.sub 自反命中，无 g 策略时仍能直配角色权限，故保留 g 维度供未来角色继承。**字段映射固化**：p 策略 v0=角色code v1=dom(tenant_id) v2=perms串 v3=act（普通统一 `do`、超管 `*`）。`app/admin/middleware/CasbinAuth` 挂在 JwtAuth 之后，路由显式声明所需 perm（`->middleware(CasbinAuth::class,'system:admin:list')`），逐角色 enforce 任一 allow 放行，全 deny → **403000 + HTTP 403**。§5 验证矩阵 6/6 通过（超管通配放行 / tester 无策略 403 / 加策略放行 / 删策略 403 / dom=1 策略对 dom=0 请求拒绝 / 无 token 由 JwtAuth 先拦 401001）。已知项：① 策略未做 Valkey 缓存（数据量小，每请求 loadPolicy；`php -S` 本身每请求重建 Enforcer，故 DB 写入即时可见，列后续优化项）；② 探针 `GET /admin/v1/_perm_probe` + `Probe` 控制器 + `TesterSeeder`（tester 角色/账号）**仅 APP_DEBUG=true 注册**，生产不暴露，作回归验证保留；③ 旧 `app/common/middleware/CasbinAuth` 占位透传保留给 api guard/M5。
+> M1-B 落地（2026-06-09，server 仓 commit e705158，GitHub+Gitee dev 双推）：casbin/casbin v0.2.1 集成。Model 采用 **rbac_with_domains 含 g**（实测 DefaultRoleManager 对 sub==p.sub 自反命中，无 g 策略时角色仍直接匹配自身 p 策略，故保留 g 维度供未来角色继承）。**自建 `app/common/library/BxCasbinAdapter`**（loadPolicy/savePolicy/addPolicy/removePolicy/removeFilteredPolicy，直读写 bx_casbin_rule，ORM 参数化）+ `app/common/service/CasbinService` 单例工厂（enforce/enforceAny/addPolicyForRole/removePolicyForRole/reload）。`app/admin/middleware/CasbinAuth` 挂载顺序 JwtAuth→CasbinAuth，所需权限走**路由显式声明** `->middleware(CasbinAuth::class, 'system:模块:动作')`，拒绝返回 **403000 + HTTP 403**。验证矩阵 6/6 通过（超管通配放行 / 无策略 403 / 加策略放行 / 删策略 403 / domain=1 拒绝 dom=0 请求 / 中间件顺序）。**bx_casbin_rule 字段映射固化**：p 策略 v0=角色code、v1=dom(tenant_id)、v2=perms 串、v3=act（普通统一 `do`、超管 `*`）；g 关系 v0=子、v1=父、v2=dom（本步未灌）。策略缓存本步未做（数据量小、php -S 每请求重建 Enforcer，DB 写入即时生效），列为常驻进程（fpm/swoole）下后续优化项。探针 `GET /admin/v1/_perm_probe` 仅 APP_DEBUG=true 注册（+ Probe 控制器 + TesterSeeder），生产不暴露，留作回归载体。已知项：旧 `app/common/middleware/CasbinAuth` 占位透传保留给 api guard/M5。
+
+> M1-C 落地（2026-06-09，server 仓 dev 双推；分 C-1/C-2/C-3 三 commit）：**黄金样板核心**，后续 CRUD（M1-D/M2/M3 生成器）均以此为唯一参照。
+> · **范式夯实**：四件套各司其职——控制器只编排参数→调 Service→返回；Service 承载业务+事务+字段白名单；Model 软删/时间戳/**租户全局作用域 globalScope=['tenant']**（单租户空操作，已接通）；Validate 场景化（create 必填、update 经 `remove()` 去必填配合 `$request->has()`）。BxController 增 `pageParam`（page_size 默认 15 上限 100）。新增 **BusinessException → 422xxx** 接入全局 Handle。
+> · **菜单 CRUD**（C-1，commit 3a405e5）：tree/详情/增/改/删/状态切换；按钮必有 perms 且无 path/component、perms 同租户唯一、改父防自指与成环；删除有子拒绝，事务清 bx_role_menu + 按 perm 清 casbin + reload。
+> · **角色 CRUD + 分配菜单**（C-2，commit 6bd17a3）：列表/详情(含 menu_ids)/增/改/删/状态 + GET|PUT `roles/:id/menus`。**分配 = 覆盖式同步**：事务内覆盖 bx_role_menu + `removeAllForRole`→逐 perm `addPolicyForRole`（适配器同连接，随 `Db::transaction` 回滚，`finally reload` 资治内存），含非法 menu 整单回滚不留半套策略。super_admin 不可删/停/改 code/分配菜单；删角色校验管理员绑定。
+> · **管理员 CRUD + profile 聚合**（C-3，见本批次提交）：列表/详情(role_ids/post_ids，永不含 password)/增(Argon2id+事务写关联)/改(选择性，密码走专用接口)/删/状态/重置密码。**超管护栏**：超管账号或含 super_admin 角色者不可删/停/被移除 super_admin 角色；禁止删/停当前登录者自己。profile 升级为 `{user,roles,menus(树),perms}`——普通管理员按其启用角色 role_menu 并集（menus 取目录/菜单且启用可见并补全祖先建树，perms 取启用菜单非空 perms 去重），超管直接全量；菜单 status 停用则同时移出 menus 与 perms。
+> · **唯一性 × 软删**：role.code / admin.username 唯一校验含 `withTrashed`（DB 唯一索引 uk_* 不区分软删，已删 code/username 不可复用，提前拦 422 避免落库 500；复用需 M2 回收站/彻底删除）。菜单 perms 无 DB 唯一索引，按启用态校验。
+> · **自测**：C-1 菜单 10+ 项、C-2 角色 16/16、C-3 管理员 22/22 全绿（含端到端：受限角色账号 menus/tree 放行、roles 新增 403000）。已知/偏差：① 自助改密接口（验旧密码）本步未做，留 profile 域后续；② 越权/护栏均为 422（业务）或 403000（鉴权），不泄露细节。
 
 ---
 
