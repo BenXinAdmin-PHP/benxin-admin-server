@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.5 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v1.7 ｜ **最后更新**：2026-06-09 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -139,6 +139,7 @@ benxin-admin-web/src/
 - **统一时间字段**：`created_at` / `updated_at` / `deleted_at`（datetime），软删除走 `deleted_at`。
 - **多租户预留**：业务表统一带 `tenant_id`（unsigned bigint，默认 0；单租户模式下恒为 0）。
 - **软删唯一键不可复用**：唯一索引（如 `role.code`、`admin.username`）不区分软删行，唯一校验含已删行（`withTrashed`，前置拦 422 避免落库 500）；软删后该值**不可复用**，需复用走 M2 彻底删除。不采用"后缀释放（`__del_{id}`）"或"生成列联合唯一"方案——保软删语义纯粹与索引简单（方案 A 定案，2026-06-09）。`bx_menu.perms` 无 DB 唯一索引，按启用态校验。
+- **创建归属字段（M2 起）**：新建的**业务数据表**标配 `create_by`（创建人 admin_id）；需部门维度数据权限的表加 `create_dept`（创建部门 id）。`BxModel` 提供创建自动填充钩子（insert 时写当前登录 adminId / dept_id），配合 ADR-9 的 `applyDataScope` 默认字段名即开即用。**系统配置/日志类表（dict/config/oper_log/login_log）按需，不强制**；M1 已有核心表不回填。首个落地点为 M2-D 文件管理。
 - 字段命名 snake_case；金额用整型分或 decimal；状态用 tinyint + 字典。
 
 ### 5.2 PHP
@@ -300,8 +301,11 @@ benxin-admin-web/src/
 | **M1-A** | 认证基建（核心表+种子 / lcobucci JWT 双令牌 / BxJwt / JwtAuth 中间件 / 后台登录·刷新·登出·profile 闭环） | ✅ 已完成 |
 | **M1-B** | php-casbin（domain=tenant_id、bx_casbin_rule 适配器、CasbinAuth 中间件、超管通配策略启用） | ✅ 已完成 |
 | **M1-C** | 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满；profile 补全菜单+权限点聚合） | ✅ 已完成 |
-| **M1-D** | 部门/岗位 CRUD + 数据权限(data_scope) + 与 web 登录全流程联调 + 自助改密 | ✅ 已完成（待 PM 做 M1 整体收口） |
-| M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
+| **M1-D** | 部门/岗位 CRUD + 数据权限(data_scope) + 与 web 登录全流程联调 + 自助改密 | ✅ 已完成 |
+| **M2-A** | 字典管理（bx_dict 类型 + bx_dict_data 数据项 + 取数接口 + 缓存） | ✅ 已完成 |
+| M2-B | 参数配置（bx_config CRUD + 分组 + 敏感值 AES 入库 + 缓存） | ⚪ 未开始 |
+| M2-C | 操作日志 + 登录日志（RequestLog 中间件自动记录 + 接入登录流） | ⚪ 未开始 |
+| M2-D | 文件管理（bx_file 上传 + 本地驱动起步 + OSS/七牛抽象、密钥 AES；首次落地 create_by/create_dept + BxModel 自动填充钩子） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
 | M4 | 通用业务（内容/支付/消息/微信配置） | ⚪ 未开始 |
 | M5 | C 端 uni-app（登录/首页/我的，懒登录） | ⚪ 未开始 |
@@ -322,12 +326,13 @@ benxin-admin-web/src/
 > M1-C 落地（2026-06-09，server 仓 C-1 3a405e5 / C-2 6bd17a3 / C-3 d6e25c7，GitHub+Gitee dev 双推）：黄金样板核心三批落地。**四件套基类职责固化**（见 §5.2）：BxController(success/fail/paginate/pageParam)、BxModel(软删+时间戳+租户 globalScope+hidden)、BxService(业务+事务+fillable 白名单)、BxValidate(场景化)；新增 `BusinessException`→422xxx 接入 Handle。**菜单 CRUD**：tree 内存建树、按钮必有 perms 且唯一、改父防自指/成环、删除有子拒绝 + 事务清 role_menu + 按 perm 清 casbin + reload。**角色 CRUD + 分配菜单**（核心授权链路）：`PUT roles/:id/menus` 事务内覆盖 bx_role_menu → removeAllForRole → 逐 perm addPolicyForRole → finally reload；非法 menu_id 整单回滚不留半套策略（BxCasbinAdapter 用默认连接同入 Db::transaction）；super_admin 不可删/停/改 code/分配菜单(422)；角色有管理员绑定则拒删。**管理员 CRUD**：超管护栏(admin 账号/super_admin 角色不可删·停·降权) + 自我保护(不可删/停当前登录者)；password 走独立改密接口、hidden 兜底剔除；关联覆盖式事务写。**profile 升级**为 `{user, roles, menus, perms}`（契约见 §7），普通管理员按角色聚合并自动补全祖先目录、超管全量、菜单停用同步移出 menus+perms。安全基线 §6/§8 全勾选，权限端到端越权 403000 验证通过。
 > **样板取舍定案（2026-06-09，M1-C 后）**：① 软删唯一键**不可复用**（方案 A，已固化入 §5.1）；② 数据权限模型**升为 ADR-9**（data_scope 五档 + 递归 CTE 子树 + bx_role_dept 自定义）；③ 自助改密接口并入 M1-D。三项已写入 M1-D 任务书。
 
-> M1-D 落地（2026-06-09，server 仓 D-1 ef7e8ae / D-2 fcc5a74、web 仓 d24afff，双仓 dev 双推）：**M1 收官**。
-> · **部门 CRUD**（复刻菜单树样板）：tree 内存建树、改父防自指/成环、删除护栏（有子部门 / 有管理员挂靠 `bx_admin.dept_id` 拒绝 422）；附 `DeptService::descendantIds`（MySQL8 `WITH RECURSIVE`，参数化）。
-> · **岗位 CRUD**（复刻角色样板）：标准 CRUD、code 唯一含 withTrashed、删除有管理员绑定（`bx_admin_post`）拒绝 422。
-> · **自助改密** `PUT /admin/v1/password`（仅 JwtAuth）：验旧密码失败 422 统一文案、新密码 Argon2id；**改密后强制重登**（拉黑当前 access + 撤销 refresh）。与 `/admins/:id/password`（重置他人）区分。
-> · **数据权限（ADR-9）**：迁移 `bx_role_dept`；`DataScope` 常量；`DataScopeService::resolve` 多角色取最宽 + `applyTo` 拼 `deptField IN (..) OR ownerField=adminId`；`BxService::applyDataScope` 作用域入口（业务表 `create_dept`/`create_by`，核心表 `dept_id`/`id`）；角色更新接收 `dept_ids`（data_scope=5 覆盖写 bx_role_dept，事务）。**bx_admin 列表示范全五档**，与软删/租户/超管护栏作用域叠加无冲突；自测 9/9（五档可见集合 DB 直算对拍 + 多角色 self∪custom + 软删叠加）。
-> · **web 登录闭环**（首次前端实质编码，benxin-admin-web）：登录→token(localStorage 持久化)→拉 profile→**动态路由**（menus 树经 `import.meta.glob` 映射组件、未实现页回退 Placeholder、守卫 addRoute 重建、hash history）→**v-permission** 按钮级显隐（perms 与后端 enforce 同源）→登出；axios **401 单飞刷新**（401003 静默换 access 重试、并发只刷新一次；401001/401004 跳登录）。type-check + 生产构建均过。后端以浏览器同款 JSON 报文验证 login/profile/refresh/logout 契约全绿。已知项：① token 存 localStorage（注明 XSS 风险，后续可选 httpOnly cookie）；② 菜单 component 页面为占位（CRUD 页面后续里程碑/前端排期补齐）；③ 路由改用 hash history（避免 dev 重写配置，配合拦截器 hash 跳转）。
+> M1-D 落地（2026-06-09，server D-1 ef7e8ae / D-2 fcc5a74、web D-3 d24afff，GitHub+Gitee dev 双推）：**部门树 CRUD**（复刻菜单样板，删除护栏：有子部门 / 有管理员挂靠 → 422）+ **岗位 CRUD**（复刻角色样板，code 含 withTrashed 唯一、有管理员绑定 → 422）+ **自助改密** `PUT /admin/v1/password`（仅 JwtAuth，验旧密码、Argon2id、**改后强制重登**＝拉黑当前 access jti + 撤 refresh 白名单）。**data_scope（ADR-9）**：新增 `bx_role_dept`（自定义范围并入 `PUT roles/:id` 当 data_scope=5）；`DeptService::descendantIds` 递归 CTE 查子树（参数化）；`BxService::applyDataScope($q,$admin,$deptField,$ownerField)` + `DataScopeService`（多角色取最宽 resolve + applyTo），模块按需调用；**bx_admin 列表示范全五档**，多角色取最宽 9/9 对拍通过，与软删/租户/超管护栏叠加无冲突。**web 首次实质编码**（benxin-admin-web）：真实登录 + token(Pinia+localStorage) + axios 401 分流（401003 单飞 refresh 静默续期重试、401001/401004 跳登录）+ profile 驱动动态路由（`import.meta.glob` 映射、未实现页 PlaceholderView 占位）+ v-permission 按钮权限 + 登出清会话；vue-tsc + 生产构建通过。已知项：① web token 存 localStorage（注明 XSS 风险，httpOnly cookie 列后续）；② 各 CRUD 页面为占位，随后续前端排期补齐（D-3 只验认证闭环）；③ **web 路由改用 hash history**（免服务器重写，定案保持）；④ data_scope 仅 bx_admin 示范，其它模块按 ADR-9 模式各自开启。
+
+> **M1 收官（2026-06-09）**：认证 + RBAC 全链路闭环——JWT 双令牌(白/黑名单) → Casbin RBAC(domain 预留) → 管理员/角色/菜单/部门/岗位五大 CRUD(黄金样板四件套基类已沉淀，见 §5.2) → 数据权限(ADR-9) → web 登录/动态路由/按钮权限。黄金样板已成型，M3 生成器据此复刻。M2 起的衔接约定见下方"M2 启动约定"。
+
+> **M2 启动约定（2026-06-09）**：① **创建归属字段**——业务数据表标配 `create_by`(+按需 `create_dept`) + BxModel 自动填充钩子，系统配置/日志表按需不强制，首个落地点 M2-D（见 §5.1）；② **M2 拆 A→B→C→D**（字典 → 参数 → 操作/登录日志 → 文件管理）；③ **暂不做回收站**（软删唯一键不可复用，待真有复用需求再于后续做彻底删除入口）。M2-A 字典管理任务书已下发。
+
+> M2-A 落地（2026-06-10，server 仓 dev 双推）：字典管理（复刻 M1 普通 CRUD 样板）。迁移 `bx_dict`(type 唯一)+`bx_dict_data`((dict_type,value) 唯一)；增量幂等 `DictSeeder`（系统管理目录下「字典管理」菜单 + `system:dict:list/create/update/delete` 4 按钮 + 示例字典 `sys_normal_disable`/`sys_yes_no`，全站状态枚举统一引用）。字典类型 CRUD + 数据项 CRUD（perm 共用 `system:dict:*`）；类型删除**事务级联软删数据项**、改 type 名时数据项 `dict_type` 跟随迁移避免孤儿。**★ 新增通用缓存模式（M2-B 复用）**：`GET /admin/v1/dicts/type/:type` 读回填 Valkey（key `dict:data:{type}`，实带 `bx:` 前缀，只缓存启用项，兜底 TTL 1 天），任何写操作（增/删/改/状态/改类型名）失效相关 key（改名清新旧两 key）；缓存读写收口在 `DictDataService`（`getByType`/`clearCache`）。路由顺序 `dicts/type/:type` 排在 `dicts/:id` 前。type/(dict_type,value) 唯一含 withTrashed（§5.1 软删不可复用）。自测 17/17：取数按 sort、缓存命中/写失效/再取新值、唯一性、级联删除+缓存清除、无 `system:dict:*` 越权 403000。已知项：字典管理前端页面随前端排期补（后端 + 种子菜单已就位，不阻塞）。
 
 ---
 

@@ -77,6 +77,23 @@ Route::group('v1', function () {
         Route::delete('posts/:id', 'Post/delete')->middleware(CasbinAuth::class, 'system:post:delete')->pattern(['id' => '\d+']);
         Route::get('posts', 'Post/index')->middleware(CasbinAuth::class, 'system:post:list');
         Route::post('posts', 'Post/save')->middleware(CasbinAuth::class, 'system:post:create');
+
+        // 字典类型（perm: system:dict:*）；type/:type 取数须排在 /:id 之前
+        Route::get('dicts/type/:type', 'Dict/dataByType')->middleware(CasbinAuth::class, 'system:dict:list');
+        Route::put('dicts/:id/status', 'Dict/status')->middleware(CasbinAuth::class, 'system:dict:update')->pattern(['id' => '\d+']);
+        Route::get('dicts/:id', 'Dict/read')->middleware(CasbinAuth::class, 'system:dict:list')->pattern(['id' => '\d+']);
+        Route::put('dicts/:id', 'Dict/update')->middleware(CasbinAuth::class, 'system:dict:update')->pattern(['id' => '\d+']);
+        Route::delete('dicts/:id', 'Dict/delete')->middleware(CasbinAuth::class, 'system:dict:delete')->pattern(['id' => '\d+']);
+        Route::get('dicts', 'Dict/index')->middleware(CasbinAuth::class, 'system:dict:list');
+        Route::post('dicts', 'Dict/save')->middleware(CasbinAuth::class, 'system:dict:create');
+
+        // 字典数据项（perm 复用 system:dict:*）
+        Route::put('dict-data/:id/status', 'DictData/status')->middleware(CasbinAuth::class, 'system:dict:update')->pattern(['id' => '\d+']);
+        Route::get('dict-data/:id', 'DictData/read')->middleware(CasbinAuth::class, 'system:dict:list')->pattern(['id' => '\d+']);
+        Route::put('dict-data/:id', 'DictData/update')->middleware(CasbinAuth::class, 'system:dict:update')->pattern(['id' => '\d+']);
+        Route::delete('dict-data/:id', 'DictData/delete')->middleware(CasbinAuth::class, 'system:dict:delete')->pattern(['id' => '\d+']);
+        Route::get('dict-data', 'DictData/index')->middleware(CasbinAuth::class, 'system:dict:list');
+        Route::post('dict-data', 'DictData/save')->middleware(CasbinAuth::class, 'system:dict:create');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----
