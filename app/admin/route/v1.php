@@ -8,6 +8,7 @@
 // | @updated   2026-06-08 16:00:00
 // +----------------------------------------------------------------------
 
+use app\admin\middleware\CasbinAuth;
 use app\admin\middleware\JwtAuth;
 use think\facade\Route;
 use think\middleware\Throttle;
@@ -28,4 +29,12 @@ Route::group('v1', function () {
         Route::post('logout', 'Auth/logout');
         Route::get('profile', 'Auth/profile');
     })->middleware(JwtAuth::class);
+
+    // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----
+    // 验证 RBAC enforce：需 system:admin:list 权限，超管通配放行、无策略角色 403000。
+    if (app()->isDebug()) {
+        Route::get('_perm_probe', 'Probe/index')
+            ->middleware(JwtAuth::class)
+            ->middleware(CasbinAuth::class, 'system:admin:list');
+    }
 });

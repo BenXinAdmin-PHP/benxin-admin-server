@@ -1,6 +1,6 @@
 # BenXinAdmin · 架构基线与约定文档
 
-> **版本**：v1.1 ｜ **最后更新**：2026-06-08 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
+> **版本**：v1.2 ｜ **最后更新**：2026-06-08 ｜ **维护**：项目经理/架构师（Claude）+ 决策人 仗键天涯(daxing)
 >
 > **本文档用途**：这是 BenXinAdmin 项目的"纲领文件"，固化所有架构决策与开发约定。
 > **跨会话使用方式**：每开一个新对话，把本文件完整贴给项目经理（Claude），即可无缝续接项目，无需重述背景。本文件应放入仓库 `benxin-admin-server/docs/ARCHITECTURE.md` 并随项目同步更新。
@@ -192,7 +192,7 @@ benxin-admin-web/src/
 |---|---|---|
 | `0` | 成功 | — |
 | `400xxx` | 请求/参数错误 | 400000 |
-| `401xxx` | 认证 | 401001 未登录、401003 token 过期、401004 刷新失效 |
+| `401xxx` | 认证 | 401001 未登录/无效 token、401002 账号或密码错误（防枚举统一文案）、401003 token 过期、401004 刷新失效 |
 | `403xxx` | 权限不足 | 403000 |
 | `404xxx` | 资源不存在 | 404000 |
 | `422xxx` | 业务校验失败 | 422000 |
@@ -287,7 +287,10 @@ benxin-admin-web/src/
 | **M0-A** | 后端脚手架（server：骨架/统一返回/中间件/迁移/端口隔离/路由+CORS） | ✅ 已完成 |
 | **M0-B** | 后台前端脚手架（web：Vue3.5+Vite8+EP2.14+Pinia+Router5+UnoCSS+ping 联调） | ✅ 已完成 |
 | **M0-C** | C 端脚手架（uniapp：uni-app+wot-design-uni+H5/微信小程序双端+ping 联调） | ✅ 已完成 |
-| M1 | 认证 + RBAC（拆 A 认证基建 / B Casbin / C 管理员·角色·菜单 CRUD / D 部门·岗位+联调）。JWT 双令牌、Casbin、管理员/角色/权限/菜单/部门/岗位 | 🔵 进行中（M1-A ✅ 认证闭环落地；B/C/D 待办） |
+| **M1-A** | 认证基建（核心表+种子 / lcobucci JWT 双令牌 / BxJwt / JwtAuth 中间件 / 后台登录·刷新·登出·profile 闭环） | ✅ 已完成 |
+| **M1-B** | php-casbin（domain=tenant_id、bx_casbin_rule 适配器、CasbinAuth 中间件、超管通配策略启用） | ✅ 已完成 |
+| M1-C | 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满；profile 补全菜单+权限点聚合） | ⚪ 未开始 |
+| M1-D | 部门/岗位 CRUD + 数据权限 + 与 web 登录全流程联调 | ⚪ 未开始 |
 | M2 | 系统管理（字典/参数/操作日志/登录日志/文件管理） | ⚪ 未开始 |
 | M3 | 代码生成器 | ⚪ 未开始 |
 | M4 | 通用业务（内容/支付/消息/微信配置） | ⚪ 未开始 |
@@ -300,9 +303,11 @@ benxin-admin-web/src/
 
 > M0 三端落地（2026-06-08，三仓 dev 双推同步）：server（路由+CORS 修复，独占 8801）、web（Vue3.5/Vite8/EP2.14/Router5，ping 联调通）、uniapp（uni-app3.x/wot-design-uni，H5+微信小程序双端 ping 均通）。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装（生产 8.4）；wot-design-uni 1.14 内部 Sass @import deprecation 警告（上游问题，不影响构建）。
 
-> M1 启动（2026-06-08）：ADR-8 定案（lcobucci/jwt + 自建 BxJwt，HS256 双 guard 独立 secret）。M1 拆 A/B/C/D 四步：A 认证基建（核心表 bx_admin/role/menu/dept/post/casbin_rule 及关联表 + 种子 + BxJwt 双令牌 + JwtAuth 中间件 + 后台登录/刷新/登出/profile 闭环）→ B php-casbin（domain=tenant_id、bx_casbin_rule 适配器、CasbinAuth 中间件、超管通配策略启用）→ C 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满）→ D 部门/岗位 CRUD + 数据权限 + 与 web 登录全流程联调。
+> M1 启动（2026-06-08）：ADR-8 定案（lcobucci/jwt + 自建 BxJwt，HS256 双 guard 独立 secret）。M1 拆 A/B/C/D 四步：A 认证基建（核心表 bx_admin/role/menu/dept/post/casbin_rule 及关联表 + 种子 + BxJwt 双令牌 + JwtAuth 中间件 + 后台登录/刷新/登出/profile 闭环）→ B php-casbin（domain=tenant_id、bx_casbin_rule 适配器、CasbinAuth 中间件、超管通配策略启用）→ C 管理员/角色/菜单 CRUD（黄金样板核心，规范度拉满）→ D 部门/岗位 CRUD + 数据权限 + 与 web 登录全流程联调。M1-A 任务书已下发，待 Claude Code 回填完成报告。
 
-> M1-A 落地（2026-06-08，server 仓 dev 双推同步）：lcobucci/jwt 5.6 + 自建 `BxJwt`（双 guard 独立 secret、access 2h / refresh 14d、jti/iss/aud/uid/tenant_id/token_type claims、access 携 rjti 便于登出反查）；Valkey（6380，redis store）落 refresh 白名单 + 登出 access 黑名单（TTL 至 exp）。9 张 M1 核心表迁移 + 幂等 AuthSeeder（本心科技部门 / 项目经理岗位 / super_admin 角色 / admin 超管 Argon2id / 系统管理菜单骨架 1 目录+5 菜单+20 按钮 / Casbin 通配 `p,super_admin,0,*,*`）。`app/admin` 落地 login/refresh/logout/profile（login 挂 10/m 限流，logout/profile 挂 JwtAuth），错误码 401001/401002/401003/401004 + 429000 自测全绿。已知项：本地 PHP 8.2 经 --ignore-platform-req 安装 lcobucci（生产 8.4 无此项）；超管初始密码取 `.env` SUPER_ADMIN_INIT_PWD，首登须改。
+> M1-A 落地（2026-06-08，server 仓 commit 8661660，GitHub+Gitee dev 双推）：9 表（bx_admin/role/menu/dept/post + admin_role/role_menu/admin_post + casbin_rule，think-migration 无裸 SQL）+ AuthSeeder 幂等种子（部门/岗位/super_admin 角色/超管 admin 账号 Argon2id/菜单 26 条 [1 目录+5 菜单+20 按钮 perms]/Casbin 超管通配 `p,super_admin,0,*,*`）；lcobucci/jwt 5.6.0 自建 BxJwt 双 guard 双令牌（access 2h/refresh 14d），refresh 白名单 + 登出黑名单(jti) 落 Valkey；admin guard 登录/刷新/登出/profile 闭环，13/13 API 自测通过。错误码新增并固化 **401002 账号或密码错误**（防枚举统一文案，已补入 §6.2）。已知项：① 本地 PHP 8.2 经 --ignore-platform-req=php 安装 lcobucci（生产 8.4 无此项）；② **`.env` 注释内的 ASCII 圆括号会触发 TP Env 解析报错，注释一律用全角（）**；③ Valkey key 实际带 TP 全局前缀，形如 `bx:bxjwt:admin:wl:refresh:{jti}`(TTL 14d) / `bx:bxjwt:admin:bl:{jti}`(TTL≤access 剩余)；④ 旧 `app/common/middleware/JwtAuth` 占位透传保留给 api guard/M5，admin 实现为新建的 `app/admin/middleware/JwtAuth`；⑤ 按默认决策未加 is_super 逃生通道、refresh 不轮换（超管权限由 M1-B Casbin 通配承载）。
+
+> M1-B 落地（2026-06-09，server 仓 dev 双推）：casbin/casbin v0.2.1 + 自建 `BxCasbinAdapter`（读写 bx_casbin_rule 标准 ptype+v0..v5，ORM 参数化，实现 load/save/add/remove/removeFiltered）+ `CasbinService` 单例工厂（enforce / enforceAny / addPolicyForRole / removePolicyForRole / reload）。Model `config/casbin/rbac_model.conf` 用 rbac_with_domains，**matcher 含 g**：`g(r.sub,p.sub,r.dom) && r.dom==p.dom && keyMatch(r.obj,p.obj) && (r.act==p.act||p.act=="*")`——实测 DefaultRoleManager 对 sub==p.sub 自反命中，无 g 策略时仍能直配角色权限，故保留 g 维度供未来角色继承。**字段映射固化**：p 策略 v0=角色code v1=dom(tenant_id) v2=perms串 v3=act（普通统一 `do`、超管 `*`）。`app/admin/middleware/CasbinAuth` 挂在 JwtAuth 之后，路由显式声明所需 perm（`->middleware(CasbinAuth::class,'system:admin:list')`），逐角色 enforce 任一 allow 放行，全 deny → **403000 + HTTP 403**。§5 验证矩阵 6/6 通过（超管通配放行 / tester 无策略 403 / 加策略放行 / 删策略 403 / dom=1 策略对 dom=0 请求拒绝 / 无 token 由 JwtAuth 先拦 401001）。已知项：① 策略未做 Valkey 缓存（数据量小，每请求 loadPolicy；`php -S` 本身每请求重建 Enforcer，故 DB 写入即时可见，列后续优化项）；② 探针 `GET /admin/v1/_perm_probe` + `Probe` 控制器 + `TesterSeeder`（tester 角色/账号）**仅 APP_DEBUG=true 注册**，生产不暴露，作回归验证保留；③ 旧 `app/common/middleware/CasbinAuth` 占位透传保留给 api guard/M5。
 
 ---
 

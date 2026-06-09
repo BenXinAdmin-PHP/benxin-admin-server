@@ -18,6 +18,7 @@
     ],
     "require": {
         "php": "^8.4",
+        "casbin/casbin": "^0.2.1",
         "lcobucci/jwt": "^5.6",
         "topthink/framework": "^8.1",
         "topthink/think-filesystem": "^2.0|^3.0",
