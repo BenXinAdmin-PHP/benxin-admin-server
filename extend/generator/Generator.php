@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-10 16:00:00
+// | @updated   2026-06-10 18:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -482,7 +482,7 @@ class Generator
 
     /**
      * delete 护栏块：受保护行（紧跟 findOrFail，复刻手写 role）→ 子节点拒删 → 绑定拒删。
-     * 树形且未声明任何 M3-C 护栏时保留 M3-B 原样（含锚点），保证向后字节级一致。
+     * 关联护栏均按 config 声明生成，未声明即不输出（无占位注释）。
      */
     private function deleteGuards(): string
     {
@@ -518,11 +518,6 @@ class Generator
             $lead = '';
         }
 
-        // 树形但未声明 M3-C 护栏：保留 M3-B 锚点原样
-        if ($hasChildGuard && !$this->meta->hasAuthChain()) {
-            $out .= "\n        // TODO M3-C: 关联绑定计数拒删（admin 挂靠 / role_menu + casbin reload）\n";
-        }
-
         return $out;
     }
 
@@ -537,11 +532,9 @@ class Generator
         $guards  = $this->meta->hasAuthChain() || $this->meta->isTree;
 
         if ($cascade === []) {
-            // 有护栏时与护栏块空行分隔；纯 CRUD（post 母版）紧跟 findOrFail
-            $lead = ($this->meta->deleteBindingGuards !== [] || $this->meta->protectedRowFor('delete') !== null) ? "\n" : '';
-            if ($this->meta->isTree && !$this->meta->hasAuthChain()) {
-                $lead = ''; // M3-B 锚点行后无空行，保持原样
-            }
+            // 有任一护栏（受保护行/子节点/绑定）时与护栏块空行分隔；纯 CRUD 紧跟 findOrFail
+            $lead = ($this->meta->isTree || $this->meta->deleteBindingGuards !== [] || $this->meta->protectedRowFor('delete') !== null)
+                ? "\n" : '';
 
             return $lead . "        {$var}->delete();\n";
         }
@@ -646,8 +639,8 @@ class Generator
 
         if (!$this->meta->hasAuthChain()) {
             return $isTree
-                ? '删除：有子节点拒绝；关联绑定护栏留 M3-C。'
-                : '删除（纯 CRUD 软删；关联护栏属授权/关系范畴，留 M3-C）。';
+                ? '删除：有子节点拒绝；关联绑定护栏按需在 config 声明。'
+                : '删除（纯 CRUD 软删；关联护栏按需在 config 声明）。';
         }
 
         $parts = [];

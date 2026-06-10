@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
+// | @updated   2026-06-10 18:00:00
 // +----------------------------------------------------------------------
 //
 // 字段级属性（缺省按表结构推导）：
@@ -20,6 +21,12 @@ return [
     'plural' => 'posts',
     'cn'     => '岗位',
     'perm'   => 'system:post',
+
+    // 绑定拒删（M3-C 收尾）：岗位被管理员绑定（bx_admin_post 中间表，无软删，直接 count，
+    // 与手写 PostService::delete 计数路径一致）→ 422
+    'deleteBindingGuards' => [
+        ['table' => 'bx_admin_post', 'fk' => 'post_id', 'cn' => '管理员'],
+    ],
     'fields' => [
         'code' => [
             'search'          => 'keyword',
