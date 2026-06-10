@@ -80,6 +80,9 @@ class Make extends Command
         $output->info("模块：{$meta->ModuleName}（{$meta->moduleCn}）｜表：{$meta->table}｜perm：{$meta->permPrefix}");
         $output->writeln('业务字段：' . implode(', ', array_map(static fn ($f) => $f['name'], $meta->fields)));
         $output->writeln('唯一字段：' . ($meta->uniqueField ?? '无') . '｜含 status：' . ($meta->hasStatus ? '是' : '否'));
+        $output->writeln('树形：' . ($meta->isTree
+            ? "是（parentField={$meta->parentField}｜sortField={$meta->sortField}｜子树策略={$meta->subtreeStrategy}）"
+            : '否'));
 
         // 渲染
         $renderer  = new StubRenderer($this->app->getRootPath() . 'extend/generator/stubs');

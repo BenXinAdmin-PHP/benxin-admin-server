@@ -150,6 +150,41 @@ class TableReader
     }
 
     /**
+     * 自引用父字段检测：列名 ∈ {parent_id, pid} 且为整型，优先 parent_id。
+     * 命中返回列名（树形模块标志），否则 null。
+     */
+    public function selfRefColumn(): ?string
+    {
+        $intCols = [];
+        foreach ($this->columns() as $c) {
+            if ($c['php_type'] === 'int') {
+                $intCols[$c['name']] = true;
+            }
+        }
+        foreach (['parent_id', 'pid'] as $candidate) {
+            if (isset($intCols[$candidate])) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 是否存在指定列。
+     */
+    public function hasColumn(string $name): bool
+    {
+        foreach ($this->columns() as $c) {
+            if ($c['name'] === $name) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * MySQL 数据类型 → PHP 标量 / 模型 cast / 校验类型 的映射表。
      *
      * @return array{php:string,cast:?string,validate:string}

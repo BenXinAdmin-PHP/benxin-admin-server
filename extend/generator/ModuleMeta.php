@@ -40,6 +40,13 @@ class ModuleMeta
     /** @var array<int,string> 敏感字段名 */
     public array $sensitiveFields = [];
 
+    // ---- 树形元数据（M3-B）----
+    public bool $isTree = false;             // 是否树形模块（自引用 parent_id）
+    public string $parentField = 'parent_id'; // 父字段列名
+    public string $sortField = 'sort';        // 树排序字段（缺列回退 id）
+    public string $subtreeStrategy = 'memory'; // memory（内存遍历）/ cte（递归 CTE）
+    public string $treeDeleteGuard = 'reject'; // reject（有子拒删）/ cascade（占位，本步不实装）
+
     /**
      * @param array<string,mixed> $config 配置数组（来自 --config 文件或直接传入）
      * @param array<string,string> $options CLI 选项覆盖（name/plural/cn/perm）
@@ -62,6 +69,16 @@ class ModuleMeta
         $m->allColumns  = $reader->columns();
         $unique         = $reader->uniqueBusinessColumns();
         $m->uniqueField = $unique[0] ?? null;
+
+        // 树形识别（自引用列推导，config 显式优先）
+        $detectedParent  = $reader->selfRefColumn();
+        $m->parentField  = (string) ($config['parentField'] ?? $detectedParent ?? 'parent_id');
+        $m->isTree       = array_key_exists('tree', $config)
+            ? (bool) $config['tree']
+            : ($detectedParent !== null);
+        $m->sortField    = (string) ($config['sortField'] ?? ($reader->hasColumn('sort') ? 'sort' : 'id'));
+        $m->subtreeStrategy = (string) ($config['subtreeStrategy'] ?? 'memory');
+        $m->treeDeleteGuard = (string) ($config['treeDeleteGuard'] ?? 'reject');
 
         $fieldCfg = (array) ($config['fields'] ?? []);
         foreach ($reader->businessColumns() as $col) {

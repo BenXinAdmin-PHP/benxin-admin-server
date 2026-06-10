@@ -1,7 +1,7 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   {{ moduleCn }} — GET|POST|PUT|DELETE /admin/v1/{{ modulePlural }}[/:id{{ statusPathHint }}]
+// | @mission   {{ moduleCn }} — GET|POST|PUT|DELETE /admin/v1/{{ modulePlural }}[{{ treePathHint }}/:id{{ statusPathHint }}]
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      {{ date }}
@@ -17,23 +17,11 @@ use app\common\base\BxController;
 use think\Response;
 
 /**
- * {{ moduleCn }} CRUD（生成器复刻 post 纯 CRUD 母版）。
+ * {{ controllerClassDoc }}
  */
 class {{ ModuleName }} extends BxController
 {
-    /**
-     * 列表（分页{{ listFilterHint }}）。
-     * GET /admin/v1/{{ modulePlural }}
-     */
-    public function index(): Response
-    {
-        [$page, $size] = $this->pageParam();
-        $result = (new {{ ModuleName }}Service($this->app))->list([
-{{ controllerFilters }}
-        ], $page, $size);
-
-        return $this->paginate($result['list'], $result['total'], $page, $size);
-    }
+{{ collectionAction }}
 
     /**
      * 详情。

@@ -60,28 +60,53 @@ class Generator
     private function controller(): string
     {
         $hasStatus = $this->meta->hasStatus;
+        $isTree    = $this->meta->isTree;
+        $src       = $isTree ? 'dept/menu' : 'post';
+        $doc       = $isTree
+            ? "{$this->meta->moduleCn} CRUD（生成器复刻 dept/menu 树形母版）。"
+            : "{$this->meta->moduleCn} CRUD（生成器复刻 post 纯 CRUD 母版）。";
 
         return $this->renderer->render('controller', $this->baseVars() + [
-            'statusPathHint'    => $hasStatus ? '|/:id/status' : '',
-            'listFilterHint'    => $this->listFilterHint(),
-            'controllerFilters' => $this->controllerFilters(),
-            'statusController'  => $hasStatus ? $this->statusController() : '',
+            'controllerClassDoc' => $doc,
+            'fidelitySrc'        => $src,
+            'treePathHint'       => $isTree ? '/tree|' : '',
+            'statusPathHint'     => $hasStatus ? '|/:id/status' : '',
+            'collectionAction'   => $isTree ? $this->treeAction() : $this->indexAction(),
+            'statusController'   => $hasStatus ? $this->statusController() : '',
         ]);
     }
 
     private function service(): string
     {
-        $u = $this->meta->uniqueField;
+        $u      = $this->meta->uniqueField;
+        $isTree = $this->meta->isTree;
+        $cte    = $isTree && $this->meta->subtreeStrategy === 'cte';
+
+        $summary = $isTree
+            ? "{$this->meta->moduleCn}服务：树构建 + CRUD（生成器复刻 dept/menu 树形母版）。"
+            : "{$this->meta->moduleCn}服务：标准 CRUD（生成器复刻 post 母版）。";
+        $mission = $isTree
+            ? "服务 — {$this->meta->moduleCn} 树形 CRUD（生成器复刻 dept/menu 母版）"
+            : "服务 — {$this->meta->moduleCn} CRUD（生成器复刻 post 母版）";
+        $deleteDoc = $isTree
+            ? '删除：有子节点拒绝；关联绑定护栏留 M3-C。'
+            : '删除（纯 CRUD 软删；关联护栏属授权/关系范畴，留 M3-C）。';
 
         return $this->renderer->render('service', $this->baseVars() + [
+            'serviceMission'    => $mission,
+            'serviceSummary'    => $summary,
+            'dbImport'          => $cte ? "use think\\facade\\Db;\n" : '',
             'uniqueDoc'         => $u !== null ? " * {$u} 唯一含软删（§5.1）。\n" : '',
-            'listDoc'           => $this->listDoc(),
             'fillable'          => $this->fillable(),
-            'listOrder'         => $this->listOrder(),
-            'searchWhere'       => $this->searchWhere(),
+            'collectionMethods' => $isTree ? $this->treeMethods() : $this->listMethod(),
+            'createParentGuard' => $isTree ? "        \$this->assertParent((int) (\$data['{$this->meta->parentField}'] ?? 0));\n" : '',
             'uniqueGuardCreate' => $u !== null ? "        \$this->assert" . ModuleMeta::studly($u) . "Unique((string) \$data['{$u}'], null);\n" : '',
-            'uniqueGuardUpdate' => $u !== null ? $this->uniqueGuardUpdate($u) : '',
+            'updateGuards'      => $this->updateGuards($u),
+            'deleteDoc'         => $deleteDoc,
+            'deleteGuard'       => $isTree ? $this->treeDeleteGuard() : '',
             'statusMethod'      => $this->meta->hasStatus ? $this->statusMethod() : '',
+            'publicTreeExtras'  => $cte ? $this->descendantIdsMethod() : '',
+            'treeHelperMethods' => $isTree ? $this->treeHelperMethods() : '',
             'uniqueGuardMethod' => $u !== null ? $this->uniqueGuardMethod($u) : '',
         ]);
     }
@@ -228,6 +253,254 @@ class Generator
         return "\n        if (array_key_exists('{$u}', \$data)) {\n"
             . "            \$this->{$method}((string) \$data['{$u}'], \$id);\n"
             . "        }\n";
+    }
+
+    /**
+     * update 护栏块：树形 → 改父防自指/成环；普通 → 唯一校验。两者皆有则父级在前。
+     */
+    private function updateGuards(?string $u): string
+    {
+        $out = '';
+        if ($this->meta->isTree) {
+            $pf   = $this->meta->parentField;
+            $out .= "\n        if (array_key_exists('{$pf}', \$data)) {\n"
+                . "            \$newParent = (int) \$data['{$pf}'];\n"
+                . "            \$this->assertParent(\$newParent);\n"
+                . "            \$this->assertNotCycle(\$id, \$newParent);\n"
+                . "        }\n";
+        }
+        if ($u !== null) {
+            $out .= $this->uniqueGuardUpdate($u);
+        }
+
+        return $out;
+    }
+
+    // ---------------------- 集合方法（list / tree 二选一） ----------------------
+
+    /**
+     * 控制器 index() 动作（普通模块分页列表）。
+     */
+    private function indexAction(): string
+    {
+        $module = $this->meta->ModuleName;
+        $plural = $this->meta->modulePlural;
+
+        return "    /**\n"
+            . "     * 列表（分页{$this->listFilterHint()}）。\n"
+            . "     * GET /admin/v1/{$plural}\n"
+            . "     */\n"
+            . "    public function index(): Response\n"
+            . "    {\n"
+            . "        [\$page, \$size] = \$this->pageParam();\n"
+            . "        \$result = (new {$module}Service(\$this->app))->list([\n"
+            . $this->controllerFilters() . "\n"
+            . "        ], \$page, \$size);\n\n"
+            . "        return \$this->paginate(\$result['list'], \$result['total'], \$page, \$size);\n"
+            . "    }";
+    }
+
+    /**
+     * 控制器 tree() 动作（树形模块，取代分页列表）。
+     */
+    private function treeAction(): string
+    {
+        $module = $this->meta->ModuleName;
+        $plural = $this->meta->modulePlural;
+
+        return "    /**\n"
+            . "     * 完整{$this->meta->moduleCn}树。\n"
+            . "     * GET /admin/v1/{$plural}/tree\n"
+            . "     */\n"
+            . "    public function tree(): Response\n"
+            . "    {\n"
+            . "        return \$this->success((new {$module}Service(\$this->app))->tree());\n"
+            . "    }";
+    }
+
+    /**
+     * 服务 list() 方法（普通模块分页列表）。
+     */
+    private function listMethod(): string
+    {
+        $module = $this->meta->ModuleName;
+
+        return "    /**\n"
+            . "     * 分页列表{$this->listDoc()}。\n"
+            . "     *\n"
+            . "     * @param array<string,mixed> \$filters\n"
+            . "     * @return array{list:array<int,mixed>,total:int}\n"
+            . "     */\n"
+            . "    public function list(array \$filters, int \$page, int \$pageSize): array\n"
+            . "    {\n"
+            . "        \$query = {$module}::{$this->listOrder()};\n"
+            . $this->searchWhere() . "\n"
+            . "        \$total = \$query->count();\n"
+            . "        \$list  = \$query->page(\$page, \$pageSize)->select()->toArray();\n\n"
+            . "        return ['list' => \$list, 'total' => \$total];\n"
+            . "    }";
+    }
+
+    /**
+     * 服务 tree() + buildTree() 方法（树形模块，内存建树）。
+     */
+    private function treeMethods(): string
+    {
+        $module = $this->meta->ModuleName;
+        $pf     = $this->meta->parentField;
+        $sf     = $this->meta->sortField;
+        $order  = $sf === 'id' ? "order('id', 'asc')" : "order('{$sf}', 'asc')->order('id', 'asc')";
+
+        return "    /**\n"
+            . "     * 完整{$this->meta->moduleCn}树（按 {$sf} 升序）。\n"
+            . "     *\n"
+            . "     * @return array<int,array>\n"
+            . "     */\n"
+            . "    public function tree(): array\n"
+            . "    {\n"
+            . "        \$list = {$module}::{$order}->select()->toArray();\n\n"
+            . "        return \$this->buildTree(\$list, 0);\n"
+            . "    }\n\n"
+            . "    /**\n"
+            . "     * 内存建树。\n"
+            . "     *\n"
+            . "     * @param array<int,array> \$list\n"
+            . "     * @return array<int,array>\n"
+            . "     */\n"
+            . "    public function buildTree(array \$list, int \$parentId = 0): array\n"
+            . "    {\n"
+            . "        \$tree = [];\n"
+            . "        foreach (\$list as \$node) {\n"
+            . "            if ((int) \$node['{$pf}'] === \$parentId) {\n"
+            . "                \$children = \$this->buildTree(\$list, (int) \$node['id']);\n"
+            . "                if (\$children !== []) {\n"
+            . "                    \$node['children'] = \$children;\n"
+            . "                }\n"
+            . "                \$tree[] = \$node;\n"
+            . "            }\n"
+            . "        }\n\n"
+            . "        return \$tree;\n"
+            . "    }";
+    }
+
+    /**
+     * 树形 delete 护栏：有子节点拒删 + 关联护栏 M3-C 锚点注释。
+     */
+    private function treeDeleteGuard(): string
+    {
+        $module = $this->meta->ModuleName;
+        $pf     = $this->meta->parentField;
+
+        return "\n        if ({$module}::where('{$pf}', \$id)->count() > 0) {\n"
+            . "            throw new BusinessException('该{$this->meta->moduleCn}存在子节点，请先删除子节点');\n"
+            . "        }\n\n"
+            . "        // TODO M3-C: 关联绑定计数拒删（admin 挂靠 / role_menu + casbin reload）\n";
+    }
+
+    /**
+     * 树形辅助方法：assertParent + assertNotCycle + 子树取法（memory: collectDescendants / cte: descendantIds）。
+     */
+    private function treeHelperMethods(): string
+    {
+        $module = $this->meta->ModuleName;
+        $cn     = $this->meta->moduleCn;
+        $pf     = $this->meta->parentField;
+        $cte    = $this->meta->subtreeStrategy === 'cte';
+
+        $out = "\n    protected function assertParent(int \$parentId): void\n"
+            . "    {\n"
+            . "        if (\$parentId === 0) {\n"
+            . "            return;\n"
+            . "        }\n"
+            . "        if ({$module}::where('id', \$parentId)->count() === 0) {\n"
+            . "            throw new BusinessException('父级{$cn}不存在');\n"
+            . "        }\n"
+            . "    }\n";
+
+        if ($cte) {
+            $out .= "\n    protected function assertNotCycle(int \$id, int \$newParentId): void\n"
+                . "    {\n"
+                . "        if (\$newParentId === 0) {\n"
+                . "            return;\n"
+                . "        }\n"
+                . "        if (\$newParentId === \$id) {\n"
+                . "            throw new BusinessException('父级不能选择自身');\n"
+                . "        }\n"
+                . "        if (in_array(\$newParentId, \$this->descendantIds(\$id), true)) {\n"
+                . "            throw new BusinessException('父级不能选择自身的子节点');\n"
+                . "        }\n"
+                . "    }\n";
+            // descendantIds 为 public（数据权限复用），作为公共方法在 separator 之前注入（publicTreeExtras）
+        } else {
+            $out .= "\n    protected function assertNotCycle(int \$id, int \$newParentId): void\n"
+                . "    {\n"
+                . "        if (\$newParentId === 0) {\n"
+                . "            return;\n"
+                . "        }\n"
+                . "        if (\$newParentId === \$id) {\n"
+                . "            throw new BusinessException('父级不能选择自身');\n"
+                . "        }\n\n"
+                . "        \$all         = {$module}::field('id,{$pf}')->select()->toArray();\n"
+                . "        \$descendants = \$this->collectDescendants(\$all, \$id);\n"
+                . "        if (in_array(\$newParentId, \$descendants, true)) {\n"
+                . "            throw new BusinessException('父级不能选择自身的子节点');\n"
+                . "        }\n"
+                . "    }\n";
+            $out .= "\n    /**\n"
+                . "     * 收集某节点的全部子孙 id（内存遍历）。\n"
+                . "     *\n"
+                . "     * @param array<int,array> \$all\n"
+                . "     * @return array<int,int>\n"
+                . "     */\n"
+                . "    protected function collectDescendants(array \$all, int \$id): array\n"
+                . "    {\n"
+                . "        \$result = [];\n"
+                . "        foreach (\$all as \$node) {\n"
+                . "            if ((int) \$node['{$pf}'] === \$id) {\n"
+                . "                \$childId  = (int) \$node['id'];\n"
+                . "                \$result[] = \$childId;\n"
+                . "                \$result   = array_merge(\$result, \$this->collectDescendants(\$all, \$childId));\n"
+                . "            }\n"
+                . "        }\n\n"
+                . "        return \$result;\n"
+                . "    }\n";
+        }
+
+        return $out;
+    }
+
+    /**
+     * 子树 id 递归 CTE 方法（MySQL8 WITH RECURSIVE，全程参数化）。
+     */
+    private function descendantIdsMethod(): string
+    {
+        $tableName = $this->meta->tableName;
+        $pf        = $this->meta->parentField;
+        $cn        = $this->meta->moduleCn;
+        $idVar     = '$' . $this->meta->moduleName . 'Id';
+        $cte       = $this->meta->moduleName . '_cte';
+
+        return "\n    /**\n"
+            . "     * 子树 id 集合（含自身 + 全部后代），MySQL8 递归 CTE（参数化）。\n"
+            . "     * 供数据权限“本{$cn}及以下”使用（ADR-9）。\n"
+            . "     *\n"
+            . "     * @return array<int,int>\n"
+            . "     */\n"
+            . "    public function descendantIds(int {$idVar}): array\n"
+            . "    {\n"
+            . "        if ({$idVar} <= 0) {\n"
+            . "            return [];\n"
+            . "        }\n\n"
+            . "        \$prefix = config('database.connections.mysql.prefix', 'bx_');\n"
+            . "        \$table  = \$prefix . '{$tableName}';\n"
+            . "        \$sql    = \"WITH RECURSIVE {$cte} AS (\"\n"
+            . "            . \"SELECT id FROM {\$table} WHERE id = ? AND deleted_at IS NULL \"\n"
+            . "            . \"UNION ALL \"\n"
+            . "            . \"SELECT d.id FROM {\$table} d INNER JOIN {$cte} c ON d.{$pf} = c.id WHERE d.deleted_at IS NULL\"\n"
+            . "            . \") SELECT id FROM {$cte}\";\n\n"
+            . "        \$rows = Db::query(\$sql, [{$idVar}]);\n\n"
+            . "        return array_map(static fn (\$r) => (int) \$r['id'], \$rows);\n"
+            . "    }\n";
     }
 
     private function uniqueGuardMethod(string $u): string
@@ -401,13 +674,19 @@ class Generator
         $pat    = "->pattern(['id' => '\\d+'])";
 
         $lines = [];
+        // 树形：/tree 取数（list perm），排在 /:id 之前；树形无 index 集合路由
+        if ($this->meta->isTree) {
+            $lines[] = "        Route::get('{$p}/tree', '{$module}/tree')->middleware(CasbinAuth::class, '{$perm}:list');";
+        }
         if ($this->meta->hasStatus) {
             $lines[] = "        Route::put('{$p}/:id/status', '{$module}/status')->middleware(CasbinAuth::class, '{$perm}:update'){$pat};";
         }
         $lines[] = "        Route::get('{$p}/:id', '{$module}/read')->middleware(CasbinAuth::class, '{$perm}:list'){$pat};";
         $lines[] = "        Route::put('{$p}/:id', '{$module}/update')->middleware(CasbinAuth::class, '{$perm}:update'){$pat};";
         $lines[] = "        Route::delete('{$p}/:id', '{$module}/delete')->middleware(CasbinAuth::class, '{$perm}:delete'){$pat};";
-        $lines[] = "        Route::get('{$p}', '{$module}/index')->middleware(CasbinAuth::class, '{$perm}:list');";
+        if (!$this->meta->isTree) {
+            $lines[] = "        Route::get('{$p}', '{$module}/index')->middleware(CasbinAuth::class, '{$perm}:list');";
+        }
         $lines[] = "        Route::post('{$p}', '{$module}/save')->middleware(CasbinAuth::class, '{$perm}:create');";
 
         return implode("\n", $lines);
