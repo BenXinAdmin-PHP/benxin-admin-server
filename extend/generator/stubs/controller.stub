@@ -1,7 +1,7 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   {{ moduleCn }} — GET|POST|PUT|DELETE /admin/v1/{{ modulePlural }}[{{ treePathHint }}/:id{{ statusPathHint }}]
+// | @mission   {{ moduleCn }} — GET|POST|PUT|DELETE /admin/v1/{{ modulePlural }}[{{ treePathHint }}/:id{{ statusPathHint }}{{ relationPathHint }}]
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      {{ date }}
@@ -31,7 +31,7 @@ class {{ ModuleName }} extends BxController
     {
         return $this->success((new {{ ModuleName }}Service($this->app))->detail($id));
     }
-
+{{ relationReadActions }}
     /**
      * 新增。
      * POST /admin/v1/{{ modulePlural }}
@@ -68,4 +68,4 @@ class {{ ModuleName }} extends BxController
 
         return $this->success(null, '删除成功');
     }
-{{ statusController }}}
+{{ statusController }}{{ relationAssignActions }}}

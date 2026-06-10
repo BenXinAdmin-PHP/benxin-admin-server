@@ -5,10 +5,12 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
+// | @updated   2026-06-10 16:00:00
 // +----------------------------------------------------------------------
 //
 // 树形键：tree(自动推导可省) / parentField / sortField / subtreeStrategy(memory|cte) / treeDeleteGuard。
 // dept 用 cte：生成 descendantIds 递归 CTE，供防环 + ADR-9 数据权限"本部门及以下"复用。
+// M3-C：deleteBindingGuards 补 admin 挂靠拒删（bx_admin 软删表 → 走 Admin Model 计数，不含已删行）。
 
 return [
     'name'            => 'Dept',
@@ -16,6 +18,11 @@ return [
     'cn'              => '部门',
     'perm'            => 'system:dept',
     'subtreeStrategy' => 'cte',
+
+    // 绑定拒删：部门下仍有管理员挂靠（bx_admin.dept_id，直接业务表外键非中间表）→ 422
+    'deleteBindingGuards' => [
+        ['table' => 'bx_admin', 'fk' => 'dept_id', 'cn' => '管理员', 'model' => 'Admin'],
+    ],
     'fields' => [
         'parent_id' => ['rule' => 'integer|egt:0'],
         'name'      => [

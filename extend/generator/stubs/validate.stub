@@ -1,7 +1,7 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   校验器 — {{ moduleCn }}（create/update{{ statusSceneHint }} 场景）
+// | @mission   校验器 — {{ moduleCn }}（create/update{{ statusSceneHint }}{{ assignSceneHint }} 场景）
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      {{ date }}
@@ -33,4 +33,4 @@ class {{ ModuleName }}Validate extends BxValidate
     {
         return $this->only([{{ sceneFields }}]){{ updateRemove }};
     }
-{{ statusScene }}}
+{{ statusScene }}{{ assignScenes }}}

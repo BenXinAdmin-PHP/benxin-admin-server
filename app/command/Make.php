@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
+// | @updated   2026-06-10 16:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -83,6 +84,27 @@ class Make extends Command
         $output->writeln('树形：' . ($meta->isTree
             ? "是（parentField={$meta->parentField}｜sortField={$meta->sortField}｜子树策略={$meta->subtreeStrategy}）"
             : '否'));
+
+        // 授权链路（M3-C）：分配接口 / 绑定拒删 / 级联清理 / 受保护行
+        if ($meta->hasAuthChain()) {
+            $parts = [];
+            foreach ($meta->relationEndpoints as $e) {
+                $assign  = 'assign' . ModuleMeta::studly($e['name']);
+                $parts[] = "分配接口 GET|PUT {$meta->modulePlural}/:id/{$e['name']}（{$assign}，perm={$e['perm']}）";
+            }
+            if ($meta->deleteBindingGuards !== []) {
+                $parts[] = '绑定拒删 ' . count($meta->deleteBindingGuards) . ' 条';
+            }
+            if ($meta->deleteCascade !== []) {
+                $parts[] = '删除级联 ' . count($meta->deleteCascade) . ' 表';
+            }
+            if ($meta->protectedRows !== []) {
+                $parts[] = '受保护行 ' . count($meta->protectedRows) . ' 条';
+            }
+            $output->writeln('授权链路：' . implode('｜', $parts));
+        } else {
+            $output->writeln('授权链路：无');
+        }
 
         // 渲染
         $renderer  = new StubRenderer($this->app->getRootPath() . 'extend/generator/stubs');

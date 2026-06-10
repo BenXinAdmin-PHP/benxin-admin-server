@@ -13,8 +13,7 @@ namespace app\admin\service;
 
 use app\common\base\BxService;
 use app\common\exception\BusinessException;
-use app\common\model\{{ ModuleName }};
-{{ dbImport }}
+{{ modelImports }}{{ serviceImports }}{{ dbImport }}
 /**
  * {{ serviceSummary }}
 {{ uniqueDoc }} */
@@ -28,7 +27,7 @@ class {{ ModuleName }}Service extends BxService
     {
         return {{ ModuleName }}::findOrFail($id);
     }
-
+{{ relationIdMethods }}
     /**
      * @param array<string,mixed> $data
      */
@@ -59,9 +58,8 @@ class {{ ModuleName }}Service extends BxService
     public function delete(int $id): void
     {
         ${{ moduleName }} = {{ ModuleName }}::findOrFail($id);
-{{ deleteGuard }}        ${{ moduleName }}->delete();
-    }
-{{ statusMethod }}{{ publicTreeExtras }}
+{{ deleteGuard }}{{ deleteAction }}    }
+{{ statusMethod }}{{ relationAssignMethods }}{{ publicTreeExtras }}
     // ------------------------------------------------------------------
 
     /**
