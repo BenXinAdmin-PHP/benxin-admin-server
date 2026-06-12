@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
+// | @updated   2026-06-12 16:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -52,6 +53,15 @@ class ErrorCode
     // 500xxx 服务端
     public const SERVER_ERROR = 500000;
 
+    // 14xxxx 微信业务段（M4-B，§6.2）
+    public const WECHAT_CONFIG_MISSING      = 140001; // 微信配置缺失/未配置
+    public const WECHAT_TOKEN_FAILED        = 140002; // access_token 获取失败
+    public const WECHAT_TICKET_FAILED       = 140003; // jsapi_ticket 获取失败
+    public const WECHAT_JSSDK_SIGN_FAILED   = 140004; // JSSDK 签名失败（缺 url 等）
+    public const WECHAT_CODE2SESSION_FAILED = 140005; // 小程序 code2session 失败
+    public const WECHAT_OAUTH_FAILED        = 140006; // 公众号 oauth 失败
+    public const WECHAT_API_ERROR           = 140099; // 微信接口通用错误（透传 errcode/errmsg）
+
     /**
      * 错误码 → 默认提示语映射。
      *
@@ -69,6 +79,14 @@ class ErrorCode
         self::VALIDATE_FAIL     => '数据校验失败',
         self::TOO_MANY_REQUESTS => '请求过于频繁，请稍后再试',
         self::SERVER_ERROR      => '服务器开小差了，请稍后再试',
+
+        self::WECHAT_CONFIG_MISSING      => '微信配置缺失，请先在后台参数配置中完善',
+        self::WECHAT_TOKEN_FAILED        => '微信 access_token 获取失败',
+        self::WECHAT_TICKET_FAILED       => '微信 jsapi_ticket 获取失败',
+        self::WECHAT_JSSDK_SIGN_FAILED   => 'JSSDK 签名失败',
+        self::WECHAT_CODE2SESSION_FAILED => '小程序登录凭证校验失败',
+        self::WECHAT_OAUTH_FAILED        => '公众号网页授权失败',
+        self::WECHAT_API_ERROR           => '微信接口调用失败',
     ];
 
     /**
