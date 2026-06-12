@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-08 16:00:00
+// | @updated   2026-06-12 14:30:00
 // +----------------------------------------------------------------------
 
 use app\admin\middleware\CasbinAuth;
@@ -119,6 +119,31 @@ Route::group('v1', function () {
         Route::get('files/:id', 'File/read')->middleware(CasbinAuth::class, 'system:file:list')->pattern(['id' => '\d+']);
         Route::delete('files/:id', 'File/delete')->middleware(CasbinAuth::class, 'system:file:delete')->pattern(['id' => '\d+']);
         Route::get('files', 'File/index')->middleware(CasbinAuth::class, 'system:file:list');
+
+        // ---- 内容模块（M4-A，bx:make 生成路由片段并入）----
+        // 内容分类（perm: content:category:*）
+        Route::get('content-categories/tree', 'ContentCategory/tree')->middleware(CasbinAuth::class, 'content:category:list');
+        Route::put('content-categories/:id/status', 'ContentCategory/status')->middleware(CasbinAuth::class, 'content:category:update')->pattern(['id' => '\d+']);
+        Route::get('content-categories/:id', 'ContentCategory/read')->middleware(CasbinAuth::class, 'content:category:list')->pattern(['id' => '\d+']);
+        Route::put('content-categories/:id', 'ContentCategory/update')->middleware(CasbinAuth::class, 'content:category:update')->pattern(['id' => '\d+']);
+        Route::delete('content-categories/:id', 'ContentCategory/delete')->middleware(CasbinAuth::class, 'content:category:delete')->pattern(['id' => '\d+']);
+        Route::post('content-categories', 'ContentCategory/save')->middleware(CasbinAuth::class, 'content:category:create');
+
+        // 内容（perm: content:info:*）
+        Route::put('contents/:id/status', 'Content/status')->middleware(CasbinAuth::class, 'content:info:update')->pattern(['id' => '\d+']);
+        Route::get('contents/:id', 'Content/read')->middleware(CasbinAuth::class, 'content:info:list')->pattern(['id' => '\d+']);
+        Route::put('contents/:id', 'Content/update')->middleware(CasbinAuth::class, 'content:info:update')->pattern(['id' => '\d+']);
+        Route::delete('contents/:id', 'Content/delete')->middleware(CasbinAuth::class, 'content:info:delete')->pattern(['id' => '\d+']);
+        Route::get('contents', 'Content/index')->middleware(CasbinAuth::class, 'content:info:list');
+        Route::post('contents', 'Content/save')->middleware(CasbinAuth::class, 'content:info:create');
+
+        // 广告位（perm: content:banner:*）
+        Route::put('banners/:id/status', 'Banner/status')->middleware(CasbinAuth::class, 'content:banner:update')->pattern(['id' => '\d+']);
+        Route::get('banners/:id', 'Banner/read')->middleware(CasbinAuth::class, 'content:banner:list')->pattern(['id' => '\d+']);
+        Route::put('banners/:id', 'Banner/update')->middleware(CasbinAuth::class, 'content:banner:update')->pattern(['id' => '\d+']);
+        Route::delete('banners/:id', 'Banner/delete')->middleware(CasbinAuth::class, 'content:banner:delete')->pattern(['id' => '\d+']);
+        Route::get('banners', 'Banner/index')->middleware(CasbinAuth::class, 'content:banner:list');
+        Route::post('banners', 'Banner/save')->middleware(CasbinAuth::class, 'content:banner:create');
     })->middleware(JwtAuth::class);
 
     // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----
