@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-12 10:00:00
+// | @updated   2026-06-12 16:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -393,7 +394,9 @@ class FrontendGenerator
         sort($names);
 
         $out = implode("\n", array_map(static fn ($n) => "  {$n},", $names));
-        if ($this->meta->isTree) {
+        // Item 类型仅 treeLeafGuard 的 strip() 帮助函数用到；无守卫的树形模块
+        // 不再输出（M4-A 回炉修复：dept/content_category 曾产出 unused import 触发 lint）
+        if ($this->meta->isTree && (array) ($this->meta->front['treeLeafGuard'] ?? []) !== []) {
             $out .= "\n  type " . $this->itemType() . ',';
         }
 
