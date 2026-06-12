@@ -4,8 +4,7 @@
 // | @mission   服务 — 内容 CRUD（生成器复刻 post 母版）
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
-// | @date      2026-06-12 14:26:41
-// | @updated   2026-06-12 14:40:00
+// | @date      2026-06-12 18:48:21
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -19,12 +18,6 @@ use app\common\model\Content;
 
 /**
  * 内容服务：标准 CRUD（生成器复刻 post 母版）。
- *
- * 生成后手工接线（M4-A 吃狗粮缺口，回炉候选详见完成报告）：
- *  - 富文本净化：create/update 落库前对 content 字段 HtmlPurifier::clean
- *    （§8 XSS 二次防护，与前端 XEditor 配合；回炉候选 richtext: true 自动注入）。
- *  - view_count 只读：服务端维护，已从 FILLABLE 剔除防越权改值（回炉候选 readonly: true）。
- *  - 置顶排序：is_top desc 优先（回炉候选 listOrder 可声明）。
  */
 class ContentService extends BxService
 {

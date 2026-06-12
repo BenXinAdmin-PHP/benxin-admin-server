@@ -13,7 +13,7 @@ namespace app\admin\service;
 
 use app\common\base\BxService;
 use app\common\exception\BusinessException;
-{{ modelImports }}{{ serviceImports }}{{ dbImport }}
+{{ libraryImports }}{{ modelImports }}{{ serviceImports }}{{ dbImport }}
 /**
  * {{ serviceSummary }}
 {{ uniqueDoc }} */
@@ -34,7 +34,7 @@ class {{ ModuleName }}Service extends BxService
     public function create(array $data): {{ ModuleName }}
     {
         $data = $this->fillable($data);
-{{ createParentGuard }}{{ uniqueGuardCreate }}        $data['tenant_id'] = {{ ModuleName }}::currentTenantId();
+{{ purifyCreate }}{{ createParentGuard }}{{ uniqueGuardCreate }}        $data['tenant_id'] = {{ ModuleName }}::currentTenantId();
 
         return {{ ModuleName }}::create($data);
     }
@@ -46,7 +46,7 @@ class {{ ModuleName }}Service extends BxService
     {
         ${{ moduleName }} = {{ ModuleName }}::findOrFail($id);
         $data = $this->fillable($data);
-{{ updateGuards }}
+{{ purifyUpdate }}{{ updateGuards }}
         ${{ moduleName }}->save($data);
 
         return ${{ moduleName }};
@@ -70,4 +70,4 @@ class {{ ModuleName }}Service extends BxService
     {
         return array_intersect_key($data, array_flip(self::FILLABLE));
     }
-{{ treeHelperMethods }}{{ uniqueGuardMethod }}}
+{{ purifyMethods }}{{ treeHelperMethods }}{{ uniqueGuardMethod }}}

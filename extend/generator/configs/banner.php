@@ -5,22 +5,30 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-12 10:00:00
+// | @updated   2026-06-12 18:00:00
 // +----------------------------------------------------------------------
 //
-// 生成器现有可声明属性覆盖不到的项（M4-A 吃狗粮缺口，详见完成报告归档）：
-//   ① image 图片：form=false → 前端 XUpload 手工槽（回炉候选 image: true）；
-//      列表用 column type=slot（XTable 既有插槽列，页面手工提供 #image 预览模板）。
-//   ② 生效区间 daterange 搜索：生成器 search 仅 keyword/exact，不支持区间
-//      （回炉候选 search: 'daterange'）→ 前端搜索项 + 后端区间条件均生成后手工补。
-//   ③ position 为字符串精确值，但生成器 exact 搜索强转 (int) → 只能并入 keyword 模糊
-//      （回炉候选：exact 按字段类型分流 int/string）。
-//   ④ start_at/end_at 用 form type=datetime（XFormDrawer A-2 新增控件类型，config 可声明）。
+// M3-E 回炉后改用新声明（M4-A 手工接线 → 生成器复刻）：
+//   ① image：image: true → 前端 XUpload 槽 + 列表 AuthImg 插槽列（宽度等仍走 front.column）。
+//   ② menuDir/menuPath/menuIcon/menuSort：seeder 挂「内容管理」目录。
+//   ③ start_at/end_at 用 form type=datetime（M4-A XFormDrawer 新增控件类型）。
+// 永久手工槽（生成器不通用化，接线见 M4-A 手工产物 + web 仓 docs/CRUD-SCHEMA.md §7）：
+//   生效区间为「双字段交集」语义（start_at/end_at 跨字段），非单字段 between——
+//   前端搜索项 prop=effective daterange + 后端 BannerService/控制器区间条件均保持手工；
+//   单字段区间已回炉为 search: 'daterange'（本模块不适用，故不声明）。
 
 return [
     'name'   => 'Banner',
     'plural' => 'banners',
     'cn'     => '广告位',
     'perm'   => 'content:banner',
+
+    // seeder 菜单挂载（M3-E menuDir/menuPath）：「内容管理」目录，不存在自动建
+    'menuDir'  => ['name' => 'Content', 'title' => '内容管理', 'path' => '/content', 'icon' => 'document', 'sort' => 2],
+    'menuPath' => '/content/banner',
+    'menuIcon' => 'picture',
+    'menuSort' => 3,
+
     'fields' => [
         'title' => [
             'search'          => 'keyword',
@@ -33,6 +41,7 @@ return [
             'front' => ['column' => ['minWidth' => 160, 'showOverflowTooltip' => true]],
         ],
         'image' => [
+            'image'           => true,
             'create_required' => true,
             'rule'            => 'require|max:255',
             'messages'        => [
@@ -40,8 +49,7 @@ return [
                 'max'     => '图片地址最长 255 字符',
             ],
             'front' => [
-                'column' => ['type' => 'slot', 'width' => 110, 'align' => 'center'],
-                'form'   => false,
+                'column' => ['width' => 110, 'align' => 'center'],
             ],
         ],
         'link' => [
@@ -93,16 +101,8 @@ return [
     'front' => [
         'keywordPlaceholder' => '标题/位置模糊查询',
         'columnOrder'        => ['title', 'image', 'position', 'status', 'start_at', 'end_at', 'sort'],
-        'formOrder'          => ['title', 'link', 'position', 'sort', 'status', 'start_at', 'end_at'],
-        'formManualSlots' => [
-            [
-                'after' => 'title',
-                'note'  => 'image 广告图 XUpload 单图（必填，M4-A 黄金样板组件）+ 列表 #image 插槽 el-image 预览，见 web 仓 docs/CRUD-SCHEMA.md §7',
-            ],
-            [
-                'after' => 'end_at',
-                'note'  => '搜索区生效区间 daterange（prop=effective）→ 后端 list 过滤「与所选区间有交集」（start_at <= 区间末 且 end_at 为空或 >= 区间起），生成器暂不支持区间搜索（回炉候选）',
-            ],
-        ],
+        'formOrder'          => ['title', 'image', 'link', 'position', 'sort', 'status', 'start_at', 'end_at'],
+        // 永久手工槽：生效区间双字段交集搜索（prop=effective）的接线在 M4-A 手工产物，
+        // 此处不留 TODO 项（手工产物即权威），约定见 config 头注释
     ],
 ];

@@ -13,25 +13,20 @@ use think\migration\Seeder;
 /**
  * {{ moduleCn }}菜单 + {{ permPrefix }}:{{ seederPermActs }} 权限（幂等）。
  * 落地方式：复制本文件到 database/seeds/ 后 `php think seed:run -s {{ ModuleName }}MenuSeeder`，
- * 或并入既有种子流程；依赖 AuthSeeder 已建「系统管理」目录(System)。
+ * 或并入既有种子流程；{{ seederDirDoc }}
  */
 class {{ ModuleName }}MenuSeeder extends Seeder
 {
     public function run(): void
     {
         $now   = date('Y-m-d H:i:s');
-        $dirId = (int) Db::name('menu')->where(['tenant_id' => 0, 'name' => 'System'])->whereNull('deleted_at')->value('id');
-        if ($dirId === 0) {
-            echo "[{{ ModuleName }}MenuSeeder] 未找到系统管理目录(System)，请先跑 AuthSeeder。\n";
-            return;
-        }
-
-        $menuId = (int) Db::name('menu')->where(['tenant_id' => 0, 'name' => 'System{{ ModuleName }}'])->whereNull('deleted_at')->value('id');
+{{ seederDirBlock }}
+        $menuId = (int) Db::name('menu')->where(['tenant_id' => 0, 'name' => '{{ seederMenuName }}'])->whereNull('deleted_at')->value('id');
         if ($menuId === 0) {
             $menuId = (int) Db::name('menu')->insertGetId([
-                'tenant_id' => 0, 'parent_id' => $dirId, 'type' => 2, 'name' => 'System{{ ModuleName }}', 'title' => '{{ moduleCn }}',
-                'path' => '/system/{{ moduleName }}', 'component' => 'system/{{ moduleName }}/index', 'perms' => '', 'icon' => 'menu',
-                'sort' => 10, 'status' => 1, 'visible' => 1, 'created_at' => $now, 'updated_at' => $now,
+                'tenant_id' => 0, 'parent_id' => $dirId, 'type' => 2, 'name' => '{{ seederMenuName }}', 'title' => '{{ moduleCn }}',
+                'path' => '{{ seederMenuPath }}', 'component' => '{{ seederMenuComponent }}', 'perms' => '', 'icon' => '{{ seederMenuIcon }}',
+                'sort' => {{ seederMenuSort }}, 'status' => 1, 'visible' => 1, 'created_at' => $now, 'updated_at' => $now,
             ]);
         }
 

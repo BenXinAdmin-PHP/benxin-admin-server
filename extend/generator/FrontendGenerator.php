@@ -327,6 +327,7 @@ class FrontendGenerator
         return $this->renderer->render('frontend/index.vue', [
             'pageMission'        => $this->pageMission(),
             'dateDay'            => $this->dateDay,
+            'componentImports'   => $this->componentImports(),
             'assignDialogImport' => $this->assignDialogImport(),
             'apiImports'         => $this->apiImports(),
             'moduleName'         => $m->moduleName,
@@ -347,12 +348,98 @@ class FrontendGenerator
             'rowActions'         => $this->rowActionsBlock(),
             'helperBlocks'       => $this->helperBlocks(),
             'entity'             => (string) ($m->front['entity'] ?? $m->moduleCn),
+            'formWidth'          => $m->richtextFields() !== []
+                ? "  // 富文本编辑需要更宽的工作区\n  width: 760,\n"
+                : '',
             'detailLine'         => $this->detailLine(),
             'formItems'          => $this->formItemsBlock(),
             'assignState'        => $this->assignState(),
             'onActionBranches'   => $this->onActionBranches(),
             'assignDialogTag'    => $this->assignDialogTag(),
+            'tableTagEnd'        => $this->tableTagEnd(),
+            'drawerTagEnd'       => $this->drawerTagEnd(),
         ]);
+    }
+
+    /**
+     * 黄金样板组件 import（M3-E）：image → XUpload(+列槽 AuthImg)、richtext → XEditor；未声明零输出。
+     */
+    private function componentImports(): string
+    {
+        $out = '';
+        if ($this->meta->imageFields() !== []) {
+            $out .= "import XUpload from '@/components/XUpload/index.vue'\n";
+            if ($this->imageColumnFields() !== []) {
+                $out .= "import AuthImg from '@/components/XUpload/AuthImg.vue'\n";
+            }
+        }
+        if ($this->meta->richtextFields() !== []) {
+            $out .= "import XEditor from '@/components/XEditor/index.vue'\n";
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>> 进列表列的图片字段（column 未显式 false）
+     */
+    private function imageColumnFields(): array
+    {
+        return array_values(array_filter(
+            $this->meta->imageFields(),
+            static fn ($f) => ($f['front']['column'] ?? []) !== false && $f['list'],
+        ));
+    }
+
+    /**
+     * XTable 标签收尾：有图片列槽 → 展开 AuthImg 模板（复刻 M4-A banner #image），否则自闭合。
+     */
+    private function tableTagEnd(): string
+    {
+        $cols = $this->imageColumnFields();
+        if ($cols === []) {
+            return ' />';
+        }
+
+        $out = '>';
+        foreach ($cols as $f) {
+            $out .= "\n      <!-- ★ image 槽：图片列受控预览（本地驱动鉴权取流，点击大图） -->\n"
+                . "      <template #{$f['name']}=\"{ row }\">\n"
+                . "        <AuthImg :src=\"row.{$f['name']}\" />\n"
+                . '      </template>';
+        }
+
+        return $out . "\n    </XTable>";
+    }
+
+    /**
+     * XFormDrawer 标签收尾：有 image/richtext 槽 → 按表单序展开 XUpload/XEditor 模板
+     * （复刻 M4-A content/banner 表单手工接线），否则自闭合。
+     */
+    private function drawerTagEnd(): string
+    {
+        $slots = [];
+        foreach ($this->orderedFields((array) ($this->meta->front['formOrder'] ?? [])) as $f) {
+            if (($f['front']['form'] ?? []) === false || $f['readonly']) {
+                continue;
+            }
+            if ($f['image']) {
+                $slots[] = "    <!-- ★ image 槽：{$this->label($f)}上传（XUpload 单图，消费 M2-D 文件通道） -->\n"
+                    . "    <template #{$f['name']}=\"{ form, disabled }\">\n"
+                    . "      <XUpload v-model=\"form.{$f['name']}\" :disabled=\"disabled\" />\n"
+                    . '    </template>';
+            } elseif ($f['richtext']) {
+                $slots[] = "    <!-- ★ richtext 槽：富文本{$this->label($f)}（XEditor/wangEditor v5；后端 HtmlPurifier 白名单兜底） -->\n"
+                    . "    <template #{$f['name']}=\"{ form, disabled }\">\n"
+                    . "      <XEditor v-model=\"form.{$f['name']}\" :disabled=\"disabled\" />\n"
+                    . '    </template>';
+            }
+        }
+        if ($slots === []) {
+            return ' />';
+        }
+
+        return ">\n" . implode("\n", $slots) . "\n  </XFormDrawer>";
     }
 
     private function pageMission(): string
@@ -485,6 +572,10 @@ class FrontendGenerator
                 $items[] = "    { prop: '{$f['name']}', label: '{$this->label($f)}', type: 'input' },";
             }
         }
+        foreach ($this->meta->daterangeFields() as $f) {
+            // 区间搜索（M3-E search:'daterange'）：daterange 控件，后端单字段 between
+            $items[] = "    { prop: '{$f['name']}', label: '{$this->label($f)}', type: 'daterange' },";
+        }
         if ($items === []) {
             return '';
         }
@@ -507,10 +598,15 @@ class FrontendGenerator
             if ($hint === false || !$f['list']) {
                 continue;
             }
+            // 富文本字段默认不进列表列（M3-E richtext，长 HTML 无列表意义；显式 column 声明可覆盖）
+            if ($f['richtext'] && $hint === []) {
+                continue;
+            }
             $hint  = (array) $hint;
             $pairs = [['prop', "'{$f['name']}'"], ['label', "'" . ($hint['label'] ?? $this->label($f)) . "'"]];
 
-            $type = $hint['type'] ?? ($f['name'] === 'status' ? 'switch' : null);
+            // image 字段默认插槽列（M3-E image，页面模板配 AuthImg 受控预览）
+            $type = $hint['type'] ?? ($f['image'] ? 'slot' : ($f['name'] === 'status' ? 'switch' : null));
             if ($type !== null) {
                 $pairs[] = ['type', "'{$type}'"];
             }
@@ -679,7 +775,15 @@ class FrontendGenerator
                 continue; // 已按树形约定生成
             }
             $hint = $f['front']['form'] ?? [];
-            if ($hint === false) {
+            if ($hint === false || $f['readonly']) {
+                continue; // readonly：服务端维护字段不渲染表单控件（M3-E）
+            }
+            // image / richtext 槽项（M3-E）：slot 控件 + 页面模板 XUpload/XEditor 接线
+            if ($f['image'] || $f['richtext']) {
+                $entries[] = $this->slotFormEntry($f);
+                foreach ($slots[$f['name']] ?? [] as $note) {
+                    $entries[] = "    // TODO 手工补充复杂联动（生成器留槽）：{$note}";
+                }
                 continue;
             }
             $hint  = (array) $hint;
@@ -725,6 +829,33 @@ class FrontendGenerator
         }
 
         return implode("\n", $entries);
+    }
+
+    /**
+     * image / richtext 槽表单项（M3-E）：注释 + slot 条目（required 对接 sceneCreate，
+     * requiredMessage 取 config messages.require，复刻 M4-A content/banner 手工接线）。
+     */
+    private function slotFormEntry(array $f): string
+    {
+        $label = $this->label($f);
+        if ($f['image']) {
+            $comment = "    // ★ image 槽（config image: true）：XUpload 单图，url 回填 {$f['name']} 字段";
+        } else {
+            $comment = "    // ★ richtext 槽（config richtext: true）：{$label} XEditor，必填时对接 sceneCreate；后端 HtmlPurifier 二次净化";
+        }
+
+        $pairs = [
+            ['prop', "'{$f['name']}'"],
+            ['label', "'{$label}'"],
+            ['type', "'slot'"],
+        ];
+        if ($f['create_required']) {
+            $msg     = (string) ($f['messages']['require'] ?? ($f['image'] ? "请上传{$label}" : "请输入{$label}"));
+            $pairs[] = ['required', 'true'];
+            $pairs[] = ['requiredMessage', "'{$msg}'"];
+        }
+
+        return $comment . "\n" . $this->entry($pairs);
     }
 
     /**

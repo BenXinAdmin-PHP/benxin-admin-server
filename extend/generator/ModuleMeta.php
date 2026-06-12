@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-12 10:00:00
+// | @updated   2026-06-12 18:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -70,6 +70,23 @@ class ModuleMeta
     //      后端 Generator 不读取，仅 FrontendGenerator 消费；缺省 = 纯约定推导 ----
     /** @var array<string,mixed> */
     public array $front = [];
+
+    // ---- 吃狗粮回炉元数据（M3-E）：均为可选声明，缺省 = 维持原行为、零输出变化 ----
+
+    /** @var array<string,string> 列表排序声明（字段 => asc|desc），缺省走 sort/id 默认排序 */
+    public array $listOrder = [];
+
+    /** @var array<string,mixed>|null seeder 父目录声明（name/title/path/icon/sort，不存在则建），缺省挂 System */
+    public ?array $menuDir = null;
+
+    /** seeder 菜单路由全路径（如 /content/info），缺省 /system/<module> */
+    public ?string $menuPath = null;
+
+    /** seeder 菜单图标，缺省 menu */
+    public ?string $menuIcon = null;
+
+    /** seeder 菜单排序，缺省 10 */
+    public ?int $menuSort = null;
 
     /**
      * @param array<string,mixed> $config 配置数组（来自 --config 文件或直接传入）
@@ -154,6 +171,22 @@ class ModuleMeta
 
         $m->front = (array) ($config['front'] ?? []);
 
+        // 吃狗粮回炉声明（M3-E）：缺省均不生效
+        $m->listOrder = array_map('strval', (array) ($config['listOrder'] ?? []));
+        if (isset($config['menuDir'])) {
+            $dir         = (array) $config['menuDir'];
+            $m->menuDir  = [
+                'name'  => (string) $dir['name'],
+                'title' => (string) $dir['title'],
+                'path'  => (string) ($dir['path'] ?? ''),
+                'icon'  => (string) ($dir['icon'] ?? 'folder'),
+                'sort'  => (int) ($dir['sort'] ?? 1),
+            ];
+        }
+        $m->menuPath = isset($config['menuPath']) ? (string) $config['menuPath'] : null;
+        $m->menuIcon = isset($config['menuIcon']) ? (string) $config['menuIcon'] : null;
+        $m->menuSort = isset($config['menuSort']) ? (int) $config['menuSort'] : null;
+
         $fieldCfg = (array) ($config['fields'] ?? []);
         foreach ($reader->businessColumns() as $col) {
             $name = $col['name'];
@@ -192,6 +225,10 @@ class ModuleMeta
                 'create_required' => (bool) ($cfg['create_required'] ?? false),
                 'update_editable' => (bool) ($cfg['update_editable'] ?? true),
                 'sensitive'       => $sensitive,
+                // 吃狗粮回炉字段属性（M3-E）：缺省 false = 维持原行为
+                'richtext'        => (bool) ($cfg['richtext'] ?? false),
+                'image'           => (bool) ($cfg['image'] ?? false),
+                'readonly'        => (bool) ($cfg['readonly'] ?? false),
                 'rule'            => $cfg['rule'] ?? null,
                 'messages'        => (array) ($cfg['messages'] ?? []),
                 'front'           => (array) ($cfg['front'] ?? []),
@@ -223,6 +260,38 @@ class ModuleMeta
     public function exactFields(): array
     {
         return array_values(array_filter($this->fields, static fn ($f) => $f['search'] === 'exact'));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>> 区间查询字段（search: 'daterange'，单字段 between）
+     */
+    public function daterangeFields(): array
+    {
+        return array_values(array_filter($this->fields, static fn ($f) => $f['search'] === 'daterange'));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>> 富文本字段（richtext: true，后端净化 + 前端 XEditor 槽）
+     */
+    public function richtextFields(): array
+    {
+        return array_values(array_filter($this->fields, static fn ($f) => $f['richtext']));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>> 图片字段（image: true，前端 XUpload 槽 + AuthImg 列）
+     */
+    public function imageFields(): array
+    {
+        return array_values(array_filter($this->fields, static fn ($f) => $f['image']));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>> 只读字段（readonly: true，排除 fillable / 表单不渲染）
+     */
+    public function readonlyFields(): array
+    {
+        return array_values(array_filter($this->fields, static fn ($f) => $f['readonly']));
     }
 
     /**

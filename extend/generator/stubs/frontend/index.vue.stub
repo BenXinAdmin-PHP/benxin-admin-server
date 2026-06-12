@@ -11,7 +11,7 @@
 import { ref } from 'vue'
 import XTable from '@/components/XTable/index.vue'
 import XFormDrawer from '@/components/XFormDrawer/index.vue'
-{{ assignDialogImport }}import {
+{{ componentImports }}{{ assignDialogImport }}import {
 {{ apiImports }}
 } from '@/api/{{ moduleName }}'
 import type { {{ tableTypeImports }} } from '@/components/XTable/types'
@@ -35,7 +35,7 @@ const config: XTableConfig = {
 {{ helperBlocks }}
 const formConfig: XFormDrawerConfig = {
   entity: '{{ entity }}',
-  api,
+{{ formWidth }}  api,
 {{ detailLine }}  items: [
 {{ formItems }}
   ],
@@ -53,8 +53,8 @@ function onAction(name: string, row: Row | null) {
 
 <template>
   <el-card shadow="never">
-    <XTable ref="tableRef" :config="config" @action="onAction" />
+    <XTable ref="tableRef" :config="config" @action="onAction"{{ tableTagEnd }}
   </el-card>
 
-  <XFormDrawer ref="drawerRef" :config="formConfig" @success="tableRef?.reload()" />
+  <XFormDrawer ref="drawerRef" :config="formConfig" @success="tableRef?.reload()"{{ drawerTagEnd }}
 {{ assignDialogTag }}</template>

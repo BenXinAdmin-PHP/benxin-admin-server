@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-12 10:00:00
+// | @updated   2026-06-12 18:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -109,6 +109,7 @@ class Generator
         return $this->renderer->render('service', $this->baseVars() + [
             'serviceMission'        => $this->serviceMission(),
             'serviceSummary'        => $this->serviceSummary(),
+            'libraryImports'        => $this->meta->richtextFields() !== [] ? "use app\\common\\library\\HtmlPurifier;\n" : '',
             'modelImports'          => $this->modelImports(),
             'serviceImports'        => $this->casbinTouched() ? "use app\\common\\service\\CasbinService;\n" : '',
             'dbImport'              => $this->needsDb($cte) ? "use think\\facade\\Db;\n" : '',
@@ -116,6 +117,8 @@ class Generator
             'fillable'              => $this->fillable(),
             'collectionMethods'     => $isTree ? $this->treeMethods() : $this->listMethod(),
             'relationIdMethods'     => $this->relationIdMethods(),
+            'purifyCreate'          => $this->purifyCalls(),
+            'purifyUpdate'          => $this->purifyCalls(),
             'createParentGuard'     => $isTree ? "        \$this->assertParent((int) (\$data['{$this->meta->parentField}'] ?? 0));\n" : '',
             'uniqueGuardCreate'     => $uniqueGuardCreate,
             'updateGuards'          => $this->updateGuards($u),
@@ -127,6 +130,7 @@ class Generator
             'publicTreeExtras'      => $cte ? $this->descendantIdsMethod() : '',
             'treeHelperMethods'     => $isTree ? $this->treeHelperMethods() : '',
             'uniqueGuardMethod'     => $uniqueGuardMethods,
+            'purifyMethods'         => $this->purifyMethods(),
         ]);
     }
 
@@ -187,9 +191,71 @@ class Generator
         }
 
         return $this->renderer->render('seeder', $this->baseVars() + [
-            'seederPermActs'  => implode('|', $acts),
-            'seederPermItems' => $items,
+            'seederPermActs'      => implode('|', $acts),
+            'seederPermItems'     => $items,
+            'seederDirDoc'        => $this->seederDirDoc(),
+            'seederDirBlock'      => $this->seederDirBlock(),
+            'seederMenuName'      => $this->seederMenuName(),
+            'seederMenuPath'      => $this->seederMenuPathValue(),
+            'seederMenuComponent' => trim($this->seederMenuPathValue(), '/') . '/index',
+            'seederMenuIcon'      => $this->meta->menuIcon ?? 'menu',
+            'seederMenuSort'      => (string) ($this->meta->menuSort ?? 10),
         ]);
+    }
+
+    /**
+     * seeder 类注释里的目录依赖说明：缺省依赖 AuthSeeder 的 System 目录；
+     * 声明 menuDir 则自建目录（M3-E，复刻 M4-A 手写 ContentSeeder）。
+     */
+    private function seederDirDoc(): string
+    {
+        $dir = $this->meta->menuDir;
+        if ($dir === null) {
+            return '依赖 AuthSeeder 已建「系统管理」目录(System)。';
+        }
+
+        return "「{$dir['title']}」目录({$dir['name']})不存在时自动创建。";
+    }
+
+    /**
+     * seeder 父目录解析块：缺省查 System 缺失即退出；声明 menuDir 则幂等 find-or-create。
+     */
+    private function seederDirBlock(): string
+    {
+        $dir = $this->meta->menuDir;
+        if ($dir === null) {
+            return "        \$dirId = (int) Db::name('menu')->where(['tenant_id' => 0, 'name' => 'System'])->whereNull('deleted_at')->value('id');\n"
+                . "        if (\$dirId === 0) {\n"
+                . "            echo \"[{$this->meta->ModuleName}MenuSeeder] 未找到系统管理目录(System)，请先跑 AuthSeeder。\\n\";\n"
+                . "            return;\n"
+                . "        }\n";
+        }
+
+        return "        \$dirId = (int) Db::name('menu')->where(['tenant_id' => 0, 'name' => '{$dir['name']}'])->whereNull('deleted_at')->value('id');\n"
+            . "        if (\$dirId === 0) {\n"
+            . "            \$dirId = (int) Db::name('menu')->insertGetId([\n"
+            . "                'tenant_id' => 0, 'parent_id' => 0, 'type' => 1, 'name' => '{$dir['name']}', 'title' => '{$dir['title']}',\n"
+            . "                'path' => '{$dir['path']}', 'component' => '', 'perms' => '', 'icon' => '{$dir['icon']}',\n"
+            . "                'sort' => {$dir['sort']}, 'status' => 1, 'visible' => 1, 'created_at' => \$now, 'updated_at' => \$now,\n"
+            . "            ]);\n"
+            . "        }\n";
+    }
+
+    /**
+     * seeder 菜单 name：缺省 System<Module>；声明 menuPath 则按路径推导（/content/info → ContentInfo）。
+     */
+    private function seederMenuName(): string
+    {
+        if ($this->meta->menuPath === null) {
+            return 'System' . $this->meta->ModuleName;
+        }
+
+        return ModuleMeta::studly(str_replace('/', '_', trim($this->meta->menuPath, '/')));
+    }
+
+    private function seederMenuPathValue(): string
+    {
+        return $this->meta->menuPath ?? ('/system/' . $this->meta->moduleName);
     }
 
     // ============================== 占位符构建 ==============================
@@ -235,13 +301,25 @@ class Generator
 
     private function fillable(): string
     {
-        $names = array_map(static fn ($f) => "'{$f['name']}'", $this->meta->fields);
+        // readonly 字段排除 fillable（M3-E：服务端维护字段防批量赋值越权，复刻 M4-A view_count）
+        $writable = array_filter($this->meta->fields, static fn ($f) => !$f['readonly']);
+        $names    = array_map(static fn ($f) => "'{$f['name']}'", $writable);
 
-        return implode(', ', $names);
+        return implode(', ', array_values($names));
     }
 
     private function listOrder(): string
     {
+        // listOrder 声明优先（M3-E：如 is_top desc 置顶先行，复刻 M4-A content）
+        if ($this->meta->listOrder !== []) {
+            $chain = [];
+            foreach ($this->meta->listOrder as $field => $dir) {
+                $chain[] = "order('{$field}', '{$dir}')";
+            }
+
+            return implode('->', $chain);
+        }
+
         foreach ($this->meta->fields as $f) {
             if ($f['name'] === 'sort') {
                 return "order('sort', 'asc')->order('id', 'asc')";
@@ -249,6 +327,45 @@ class Generator
         }
 
         return "order('id', 'asc')";
+    }
+
+    /**
+     * 富文本净化调用行（create/update 共用，fillable 后、落库前注入；复刻 M4-A ContentService）。
+     */
+    private function purifyCalls(): string
+    {
+        $out = '';
+        foreach ($this->meta->richtextFields() as $f) {
+            $out .= '        $data = $this->purify' . ModuleMeta::studly($f['name']) . "(\$data);\n";
+        }
+
+        return $out;
+    }
+
+    /**
+     * 富文本净化方法块（每个 richtext 字段一个，置于 fillable() 之后；复刻 M4-A 手工接线）。
+     */
+    private function purifyMethods(): string
+    {
+        $out = '';
+        foreach ($this->meta->richtextFields() as $f) {
+            $method = 'purify' . ModuleMeta::studly($f['name']);
+            $out .= "\n    /**\n"
+                . "     * 富文本字段落库前净化（白名单剥离 script、on* 事件、javascript: 协议等，§8 XSS）。\n"
+                . "     *\n"
+                . "     * @param array<string,mixed> \$data\n"
+                . "     * @return array<string,mixed>\n"
+                . "     */\n"
+                . "    protected function {$method}(array \$data): array\n"
+                . "    {\n"
+                . "        if (array_key_exists('{$f['name']}', \$data)) {\n"
+                . "            \$data['{$f['name']}'] = HtmlPurifier::clean((string) \$data['{$f['name']}']);\n"
+                . "        }\n\n"
+                . "        return \$data;\n"
+                . "    }\n";
+        }
+
+        return $out;
     }
 
     private function listDoc(): string
@@ -260,6 +377,9 @@ class Generator
         }
         foreach ($this->meta->exactFields() as $f) {
             $parts[] = $f['name'] . ' 精确';
+        }
+        foreach ($this->meta->daterangeFields() as $f) {
+            $parts[] = $f['name'] . ' 区间';
         }
 
         return $parts === [] ? '' : '（' . implode('；', $parts) . '）';
@@ -290,8 +410,21 @@ class Generator
         }
         foreach ($exact as $f) {
             $n = $f['name'];
+            // exact 类型分流（M3-E bug 修复）：整型字段保持 (int) 强转，字符串字段等值不强转
+            $castExpr = $f['cast'] === 'integer'
+                ? "(int) \$filters['{$n}']"
+                : "(string) \$filters['{$n}']";
             $out .= "        if ((\$filters['{$n}'] ?? '') !== '') {\n";
-            $out .= "            \$query->where('{$n}', (int) \$filters['{$n}']);\n";
+            $out .= "            \$query->where('{$n}', {$castExpr});\n";
+            $out .= "        }\n";
+        }
+        foreach ($this->meta->daterangeFields() as $f) {
+            $n = $f['name'];
+            // 区间搜索（M3-E）：[起, 止] 日期对 → 单字段 between（参数化，日界对齐）
+            $out .= "        \$range = (array) (\$filters['{$n}'] ?? []);\n";
+            $out .= "        if (count(\$range) === 2 && (string) \$range[0] !== '' && (string) \$range[1] !== '') {\n";
+            $out .= "            \$query->where('{$n}', '>=', (string) \$range[0] . ' 00:00:00');\n";
+            $out .= "            \$query->where('{$n}', '<=', (string) \$range[1] . ' 23:59:59');\n";
             $out .= "        }\n";
         }
 
@@ -868,9 +1001,13 @@ class Generator
             return '';
         }
 
-        $pairs = [];
+        $rangeKeys = array_map(static fn ($f) => $f['name'], $this->meta->daterangeFields());
+        $pairs     = [];
         foreach ($keys as $k) {
-            $pairs[$k] = "\$this->request->param('{$k}', '')";
+            // 区间参数取数组（/a 修饰符），其余取字符串
+            $pairs[$k] = in_array($k, $rangeKeys, true)
+                ? "\$this->request->param('{$k}/a', [])"
+                : "\$this->request->param('{$k}', '')";
         }
 
         return $this->alignedAssoc($pairs, 12, static fn ($v) => $v);
@@ -886,6 +1023,9 @@ class Generator
             $keys[] = 'keyword';
         }
         foreach ($this->meta->exactFields() as $f) {
+            $keys[] = $f['name'];
+        }
+        foreach ($this->meta->daterangeFields() as $f) {
             $keys[] = $f['name'];
         }
 
