@@ -1,0 +1,12 @@
+/*
+ * +----------------------------------------------------------------------
+ * | @project   BenXinAdmin
+ * | @mission   {{ apiMission }}
+ * | @author    仗键天涯(daxing)
+ * | @email     3442535897@qq.com
+ * | @date      {{ dateDay }}
+ * +----------------------------------------------------------------------
+ */
+import { request{{ requestTypeImports }} } from '@/utils/request'
+
+{{ itemInterface }}{{ detailInterface }}{{ apiFunctions }}

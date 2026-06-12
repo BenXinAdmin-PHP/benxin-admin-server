@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-10 16:00:00
+// | @updated   2026-06-12 10:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -65,6 +65,11 @@ class ModuleMeta
 
     /** @var array<int,array<string,mixed>> 可空唯一字段（非空才校验、不含 withTrashed；区别于 uniqueField 强唯一） */
     public array $nullableUniqueFields = [];
+
+    // ---- 前端产物元数据（M3-D1）：模块级 front 声明（枚举/联动钩子/列宽等手调项），
+    //      后端 Generator 不读取，仅 FrontendGenerator 消费；缺省 = 纯约定推导 ----
+    /** @var array<string,mixed> */
+    public array $front = [];
 
     /**
      * @param array<string,mixed> $config 配置数组（来自 --config 文件或直接传入）
@@ -128,6 +133,7 @@ class ModuleMeta
                 'targetModel'   => (string) ($e['targetModel'] ?? self::studly(self::stripPrefix((string) $e['targetTable'], $prefix))),
                 'targetFk'      => (string) $e['targetFk'],
                 'perm'          => (string) $e['perm'],
+                'front'         => (array) ($e['front'] ?? []),
                 'casbinSync'    => [
                     'enabled'     => (bool) ($sync['enabled'] ?? false),
                     'subField'    => (string) ($sync['subField'] ?? 'code'),
@@ -145,6 +151,8 @@ class ModuleMeta
                 'cn'          => (string) ($p['cn'] ?? $p['matchValue']),
             ];
         }
+
+        $m->front = (array) ($config['front'] ?? []);
 
         $fieldCfg = (array) ($config['fields'] ?? []);
         foreach ($reader->businessColumns() as $col) {
@@ -186,6 +194,7 @@ class ModuleMeta
                 'sensitive'       => $sensitive,
                 'rule'            => $cfg['rule'] ?? null,
                 'messages'        => (array) ($cfg['messages'] ?? []),
+                'front'           => (array) ($cfg['front'] ?? []),
             ];
         }
 

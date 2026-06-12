@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 15:00:00
+// | @updated   2026-06-12 10:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -56,6 +57,7 @@ class RoleValidate extends BxValidate
 
     public function sceneAssignMenus(): static
     {
-        return $this->only(['menu_ids'])->append('menu_ids', 'require');
+        // append array 而非 require：允许空数组 = 清空授权（覆盖式语义自洽）
+        return $this->only(['menu_ids'])->append('menu_ids', 'array');
     }
 }

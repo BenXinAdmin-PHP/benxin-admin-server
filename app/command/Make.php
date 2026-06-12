@@ -5,13 +5,14 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-10 16:00:00
+// | @updated   2026-06-12 10:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
 
 namespace app\command;
 
+use generator\FrontendGenerator;
 use generator\Generator;
 use generator\ModuleMeta;
 use generator\StubRenderer;
@@ -24,7 +25,8 @@ use think\console\Output;
 use think\facade\Db;
 
 /**
- * 代码生成器命令：依据表结构 + 模块元数据，复刻 post 纯 CRUD 四件套 + 路由/种子片段。
+ * 代码生成器命令：依据表结构 + 模块元数据，复刻后端四件套 + 路由/种子片段，
+ * 以及前端产物（M3-D1：列表页 + 编辑表单 + 分配弹窗 + api 薄壳，复刻 web 仓 D0 黄金样板）。
  *
  *   php think bx:make bx_post --config=extend/generator/configs/post.php --output=runtime/generated/post --dry-run
  *
@@ -47,7 +49,7 @@ class Make extends Command
             ->addOption('perm', null, Option::VALUE_REQUIRED, 'perm 前缀（如 system:post）')
             ->addOption('force', null, Option::VALUE_NONE, '强制覆盖已存在文件')
             ->addOption('dry-run', null, Option::VALUE_NONE, '只列清单不落地')
-            ->setDescription('BenXinAdmin 代码生成器：表结构 → 后端四件套 + 路由/种子片段');
+            ->setDescription('BenXinAdmin 代码生成器：表结构 → 后端四件套 + 路由/种子片段 + 前端列表/表单/分配弹窗/api 薄壳');
     }
 
     protected function execute(Input $input, Output $output): int
@@ -106,10 +108,15 @@ class Make extends Command
             $output->writeln('授权链路：无');
         }
 
-        // 渲染
+        // 渲染：后端四件套 + 路由/种子片段 + 前端产物（M3-D1：列表页/编辑表单/分配弹窗/api 薄壳）
         $renderer  = new StubRenderer($this->app->getRootPath() . 'extend/generator/stubs');
-        $generator = new Generator($meta, $renderer, date('Y-m-d H:i:s'));
-        $files     = $this->resolvePaths($generator->generate(), (string) ($input->getOption('output') ?? ''));
+        $now       = date('Y-m-d H:i:s');
+        $generator = new Generator($meta, $renderer, $now);
+        $frontend  = new FrontendGenerator($meta, $renderer, $now);
+        $files     = $this->resolvePaths(
+            $generator->generate() + $frontend->generate(),
+            (string) ($input->getOption('output') ?? ''),
+        );
 
         // dry-run：只列清单
         if ($input->getOption('dry-run')) {
@@ -142,6 +149,8 @@ class Make extends Command
         $output->comment('路由/种子为【片段】，不会自动改既有 v1.php/seeder：');
         $output->writeln('  · 路由片段并入 app/admin/route/v1.php「系统管理 CRUD」分组（具体 action > /:id > 集合）');
         $output->writeln('  · 种子片段复制到 database/seeds/ 后 `php think seed:run -s ' . $meta->ModuleName . 'MenuSeeder`');
+        $output->writeln('  · 前端产物（frontend/src/…）不自动写 web 仓：人工 copy api/<module>.ts 与 views 页面，');
+        $output->writeln('    动态路由由 import.meta.glob 自动接管，新建 .vue 即生效');
 
         return 0;
     }
@@ -178,6 +187,9 @@ class Make extends Command
             }
             if (str_starts_with($rel, 'route/') || str_starts_with($rel, 'seeder/')) {
                 $resolved['extend/generator/output/' . basename($rel)] = $content;
+            } elseif (str_starts_with($rel, 'frontend/')) {
+                // 前端产物不自动写 web 仓（跨仓，人工 copy），默认落生成器 output 目录
+                $resolved['extend/generator/output/' . $rel] = $content;
             } else {
                 $resolved[$rel] = $content;
             }

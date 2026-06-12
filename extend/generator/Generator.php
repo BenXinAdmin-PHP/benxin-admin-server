@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-10 18:00:00
+// | @updated   2026-06-12 10:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -1210,6 +1210,7 @@ class Generator
 
     /**
      * 校验器：分配场景（sceneAssignXxx，复刻手写 sceneAssignMenus）。
+     * append array 而非 require：允许空数组 = 清空授权（M3-D1 修正，覆盖式语义自洽）。
      */
     private function assignScenes(): string
     {
@@ -1219,7 +1220,8 @@ class Generator
             $key    = $e['targetFk'] . 's';
             $out .= "\n    public function scene" . ucfirst($method) . "(): static\n"
                 . "    {\n"
-                . "        return \$this->only(['{$key}'])->append('{$key}', 'require');\n"
+                . "        // append array 而非 require：允许空数组 = 清空授权（覆盖式语义自洽）\n"
+                . "        return \$this->only(['{$key}'])->append('{$key}', 'array');\n"
                 . "    }\n";
         }
 
