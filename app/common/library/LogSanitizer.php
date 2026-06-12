@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 18:00:00
+// | @updated   2026-06-12 18:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -25,6 +26,8 @@ class LogSanitizer
     protected const BLACKLIST = [
         'password', 'old_password', 'new_password', 'confirm_password',
         'access_token', 'refresh_token', 'token',
+        // M4-B 微信：session_key/js_code 不落日志明文（§8）
+        'session_key', 'js_code',
     ];
 
     /** 语义匹配（键名含这些片段即视为敏感） */

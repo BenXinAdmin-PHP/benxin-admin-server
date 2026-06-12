@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-12 14:30:00
+// | @updated   2026-06-12 18:00:00
 // +----------------------------------------------------------------------
 
 use app\admin\middleware\CasbinAuth;
@@ -146,11 +146,13 @@ Route::group('v1', function () {
         Route::post('banners', 'Banner/save')->middleware(CasbinAuth::class, 'content:banner:create');
     })->middleware(JwtAuth::class);
 
-    // ---- M1-B 权限探针（仅调试态注册；JwtAuth → CasbinAuth）----
-    // 验证 RBAC enforce：需 system:admin:list 权限，超管通配放行、无策略角色 403000。
+    // ---- 调试探针（仅调试态注册，生产不暴露）----
     if (app()->isDebug()) {
+        // M1-B 权限探针：验证 RBAC enforce，需 system:admin:list 权限
         Route::get('_perm_probe', 'Probe/index')
             ->middleware(JwtAuth::class)
             ->middleware(CasbinAuth::class, 'system:admin:list');
+        // M4-B 微信探针：配置就绪态 + token/签名/oauth URL 样例（需登录）
+        Route::get('_wechat_probe', 'Probe/wechat')->middleware(JwtAuth::class);
     }
 });
