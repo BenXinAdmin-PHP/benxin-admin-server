@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-12 16:00:00
+// | @updated   2026-06-13 10:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -53,6 +53,17 @@ class ErrorCode
     // 500xxx 服务端
     public const SERVER_ERROR = 500000;
 
+    // 12xxxx 支付业务段（M4-C，§6.2）
+    public const PAY_CONFIG_MISSING   = 120001; // 支付配置缺失
+    public const PAY_PREPAY_FAILED    = 120002; // 下单失败
+    public const PAY_ORDER_NOT_FOUND  = 120003; // 订单不存在
+    public const PAY_ILLEGAL_TRANSIT  = 120004; // 订单状态非法迁移
+    public const PAY_NOTIFY_VERIFY    = 120005; // 回调验签失败
+    public const PAY_AMOUNT_MISMATCH  = 120006; // 金额不一致（防篡改）
+    public const PAY_REFUND_FAILED    = 120007; // 退款失败
+    public const PAY_REFUND_OVERFLOW  = 120008; // 退款金额超可退余额
+    public const PAY_CHANNEL_ERROR    = 120099; // 渠道通用错误（透传）
+
     // 14xxxx 微信业务段（M4-B，§6.2）
     public const WECHAT_CONFIG_MISSING      = 140001; // 微信配置缺失/未配置
     public const WECHAT_TOKEN_FAILED        = 140002; // access_token 获取失败
@@ -79,6 +90,16 @@ class ErrorCode
         self::VALIDATE_FAIL     => '数据校验失败',
         self::TOO_MANY_REQUESTS => '请求过于频繁，请稍后再试',
         self::SERVER_ERROR      => '服务器开小差了，请稍后再试',
+
+        self::PAY_CONFIG_MISSING  => '支付配置缺失，请先在后台参数配置中完善',
+        self::PAY_PREPAY_FAILED   => '下单失败',
+        self::PAY_ORDER_NOT_FOUND => '支付订单不存在',
+        self::PAY_ILLEGAL_TRANSIT => '订单状态非法迁移',
+        self::PAY_NOTIFY_VERIFY   => '回调验签失败',
+        self::PAY_AMOUNT_MISMATCH => '支付金额不一致',
+        self::PAY_REFUND_FAILED   => '退款失败',
+        self::PAY_REFUND_OVERFLOW => '退款金额超过可退余额',
+        self::PAY_CHANNEL_ERROR   => '支付渠道调用失败',
 
         self::WECHAT_CONFIG_MISSING      => '微信配置缺失，请先在后台参数配置中完善',
         self::WECHAT_TOKEN_FAILED        => '微信 access_token 获取失败',
