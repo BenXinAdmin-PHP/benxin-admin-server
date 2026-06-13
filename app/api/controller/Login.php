@@ -13,9 +13,13 @@ namespace app\api\controller;
 
 use app\api\validate\LoginValidate;
 use app\common\base\BxController;
+use app\common\exception\BusinessException;
 use app\common\exception\WechatException;
+use app\common\library\BxCache;
 use app\common\library\BxJwt;
 use app\common\library\ErrorCode;
+use app\common\library\Uuid;
+use app\common\library\wechat\MpAccount;
 use app\common\library\wechat\WechatManager;
 use app\common\model\User;
 use app\common\service\SmsCodeService;
@@ -100,6 +104,30 @@ class Login extends BxController
         $user = $service->loginOrRegister('mp', $openid, $mobile, $unionid);
 
         return $this->issue($user);
+    }
+
+    /**
+     * H5 公众号网页授权跳转 URL（M5-C，免登录，供前端 location.href 跳转微信授权）。
+     * GET /api/v1/login/wechat/oauth-url { redirect_uri, scope?, state? }
+     * 复用 MpAccount::oauthUrl；后端生成随机 state 写 Valkey 短 TTL，并回传供前端回调比对（防 CSRF）。
+     * 注：redirect_uri 域名须属公众号已配「网页授权回调域名」（生产由 daxing 在公众平台配置，后端不强校验）。
+     */
+    public function oauthUrl(): Response
+    {
+        $redirectUri = trim((string) $this->request->param('redirect_uri', ''));
+        if ($redirectUri === '') {
+            throw new BusinessException('缺少 redirect_uri', ErrorCode::PARAM_ERROR);
+        }
+        $scope = trim((string) $this->request->param('scope', MpAccount::SCOPE_BASE));
+
+        // 随机 state 防 CSRF：写 Valkey 短 TTL（5min），回传前端，回调时比对一致才放行登录
+        $state = Uuid::v4();
+        BxCache::store()->set("login:oauth_state:{$state}", 1, 300);
+
+        // scope 非法 / 配置缺失由 MpAccount 抛 WechatException（140006/140001）
+        $url = WechatManager::mp()->oauthUrl($redirectUri, $scope, $state);
+
+        return $this->success(['url' => $url, 'state' => $state]);
     }
 
     /**
