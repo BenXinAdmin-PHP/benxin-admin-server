@@ -31,38 +31,39 @@ use think\facade\Log;
  *           default        => null,   // 非本业务，忽略
  *       };
  *
- * 本示例监听已在底座 app/event.php 注册，仅记一条 debug 日志证明事件链路联通，
- * **不做任何业务动作**。上层项目应替换为自己的 listener，或在自己仓库另行注册。
+ * 本示例监听已在底座 app/event.php 注册（PaySuccess/RefundSuccess 均绑定本类 handle），
+ * 仅记一条 debug 日志证明事件链路联通，**不做任何业务动作**。
+ * 上层项目应替换为自己的 listener，或在自己仓库另行注册。
  */
 class PayBizExampleListener
 {
     /**
-     * 监听支付成功（TP 事件回调；类绑定到具体事件由 event.php 决定）。
+     * TP 事件统一回调：按事件类型分发（底座零业务，仅留痕证明链路联通）。
+     *
+     * @param object $event PaySuccessEvent | RefundSuccessEvent
      */
-    public function onPaySuccess(PaySuccessEvent $event): void
+    public function handle(object $event): void
     {
-        // 底座零业务：仅留痕，证明 fire→listener 链路联通。
-        Log::debug(sprintf(
-            '[PayBizExample] 支付成功事件已派发：order_no=%s biz_type=%s biz_id=%s amount=%d（上层应在此路由到自己的业务）',
-            $event->orderNo,
-            $event->bizType,
-            $event->bizId,
-            $event->amount,
-        ));
-    }
+        if ($event instanceof PaySuccessEvent) {
+            Log::debug(sprintf(
+                '[PayBizExample] 支付成功事件已派发：order_no=%s biz_type=%s biz_id=%s amount=%d（上层应在此路由到自己的业务）',
+                $event->orderNo,
+                $event->bizType,
+                $event->bizId,
+                $event->amount,
+            ));
 
-    /**
-     * 监听退款成功。
-     */
-    public function onRefundSuccess(RefundSuccessEvent $event): void
-    {
-        Log::debug(sprintf(
-            '[PayBizExample] 退款成功事件已派发：refund_no=%s biz_type=%s biz_id=%s amount=%d 全额=%s',
-            $event->refundNo,
-            $event->bizType,
-            $event->bizId,
-            $event->refundAmount,
-            $event->fullyRefunded ? 'yes' : 'no',
-        ));
+            return;
+        }
+        if ($event instanceof RefundSuccessEvent) {
+            Log::debug(sprintf(
+                '[PayBizExample] 退款成功事件已派发：refund_no=%s biz_type=%s biz_id=%s amount=%d 全额=%s',
+                $event->refundNo,
+                $event->bizType,
+                $event->bizId,
+                $event->refundAmount,
+                $event->fullyRefunded ? 'yes' : 'no',
+            ));
+        }
     }
 }

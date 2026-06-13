@@ -19,4 +19,7 @@ Route::group('v1', function () {
     // ---- 微信能力（M4-B）----
     // JSSDK 签名：H5 公众号取签名四元组（懒登录不强制）；公开接口挂限流 60 次/分/IP
     Route::get('wechat/jssdk', 'Wechat/jssdk')->middleware(Throttle::class, ['visit_rate' => '60/m']);
+
+    // ---- 支付回调（M4-C，渠道异步通知，公开不鉴权；安全四件套在 BxPay 收口）----
+    Route::post('pay/notify/:channel', 'Pay/notify');
 });

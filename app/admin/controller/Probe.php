@@ -1,11 +1,11 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   调试探针 — _perm_probe（M1-B）/ _wechat_probe（M4-B），仅调试态注册
+// | @mission   调试探针 — _perm_probe（M1-B）/ _wechat_probe（M4-B）/ _pay_probe（M4-C），仅调试态注册
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 10:00:00
-// | @updated   2026-06-12 18:00:00
+// | @updated   2026-06-13 11:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -14,8 +14,12 @@ namespace app\admin\controller;
 
 use app\admin\service\ConfigService;
 use app\common\base\BxController;
+use app\common\exception\PayException;
 use app\common\exception\WechatException;
+use app\common\library\pay\AlipayProvider;
+use app\common\library\pay\WechatPayProvider;
 use app\common\library\wechat\WechatManager;
+use app\common\model\PayOrder;
 use think\Response;
 
 /**
@@ -68,6 +72,58 @@ class Probe extends BxController
             'oauth_url_sample'  => $attempt(static fn (): array => [
                 'url' => WechatManager::mp()->oauthUrl('https://example.com/oauth/callback', 'snsapi_base', 'probe-state'),
             ]),
+        ]);
+    }
+
+    /**
+     * 支付能力探针（M4-C）：配置就绪态 + 下单参数构造样例 + 状态机迁移样例。
+     * 无配置/占位假串时以 {ok:false, code:120001} 呈现，整体不报错。
+     * 不触发真实渠道 HTTP（下单/验签为「需真实商户号」边界），仅离线可验项。
+     */
+    public function pay(): Response
+    {
+        $config = new ConfigService($this->app);
+        $group  = $config->getGroup('pay');
+        $ready  = [];
+        foreach (['wxpay_mch_id', 'wxpay_api_v3_key', 'wxpay_cert_serial', 'wxpay_private_key', 'wxpay_notify_url', 'alipay_app_id', 'alipay_private_key', 'alipay_public_key', 'alipay_notify_url'] as $key) {
+            $ready[$key] = trim((string) ($group[$key] ?? '')) !== '';
+        }
+
+        $attempt = static function (callable $fn): array {
+            try {
+                return ['ok' => true] + $fn();
+            } catch (PayException $e) {
+                return ['ok' => false, 'code' => $e->bizCode, 'msg' => $e->getMessage()];
+            }
+        };
+
+        // 离线样例订单（不落库）
+        $sample              = new PayOrder();
+        $sample->out_trade_no = 'OT_PROBE_SAMPLE';
+        $sample->subject      = '探针样例';
+        $sample->amount       = 1;
+        $sample->trade_type   = 'jsapi';
+        $sample->openid       = 'OPENID_PROBE';
+
+        $sampleAli              = new PayOrder();
+        $sampleAli->out_trade_no = 'OT_PROBE_SAMPLE';
+        $sampleAli->subject      = '探针样例';
+        $sampleAli->amount       = 1234;
+        $sampleAli->trade_type   = 'page';
+
+        return $this->success([
+            'config_ready'      => $ready,
+            'wechat_prepay_args' => $attempt(static fn (): array => [
+                'order' => (new WechatPayProvider($config))->buildPrepayOrder($sample),
+            ]),
+            'alipay_prepay_args' => $attempt(static fn (): array => [
+                'order' => (new AlipayProvider($config))->buildPrepayOrder($sampleAli),
+            ]),
+            'state_machine'     => [
+                'pending→paid'      => PayOrder::canTransit(PayOrder::STATUS_PENDING, PayOrder::STATUS_PAID),
+                'paid→part_refund'  => PayOrder::canTransit(PayOrder::STATUS_PAID, PayOrder::STATUS_PART_REFUNDED),
+                'refunded→paid(非法)' => PayOrder::canTransit(PayOrder::STATUS_REFUNDED, PayOrder::STATUS_PAID),
+            ],
         ]);
     }
 }

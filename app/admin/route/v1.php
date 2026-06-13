@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-12 18:00:00
+// | @updated   2026-06-13 11:00:00
 // +----------------------------------------------------------------------
 
 use app\admin\middleware\CasbinAuth;
@@ -144,6 +144,12 @@ Route::group('v1', function () {
         Route::delete('banners/:id', 'Banner/delete')->middleware(CasbinAuth::class, 'content:banner:delete')->pattern(['id' => '\d+']);
         Route::get('banners', 'Banner/index')->middleware(CasbinAuth::class, 'content:banner:list');
         Route::post('banners', 'Banner/save')->middleware(CasbinAuth::class, 'content:banner:create');
+
+        // ---- 支付订单管理（M4-C，手写；只读 + 退款）----
+        // 退款为敏感操作（perm: system:pay:refund + 二次确认）；列表/详情只读（perm: system:pay:list）
+        Route::post('pay-orders/:id/refund', 'Pay/refund')->middleware(CasbinAuth::class, 'system:pay:refund')->pattern(['id' => '\d+']);
+        Route::get('pay-orders/:id', 'Pay/read')->middleware(CasbinAuth::class, 'system:pay:list')->pattern(['id' => '\d+']);
+        Route::get('pay-orders', 'Pay/index')->middleware(CasbinAuth::class, 'system:pay:list');
     })->middleware(JwtAuth::class);
 
     // ---- 调试探针（仅调试态注册，生产不暴露）----
@@ -154,5 +160,7 @@ Route::group('v1', function () {
             ->middleware(CasbinAuth::class, 'system:admin:list');
         // M4-B 微信探针：配置就绪态 + token/签名/oauth URL 样例（需登录）
         Route::get('_wechat_probe', 'Probe/wechat')->middleware(JwtAuth::class);
+        // M4-C 支付探针：配置就绪态 + 下单参数构造 + 状态机迁移样例（需登录）
+        Route::get('_pay_probe', 'Probe/pay')->middleware(JwtAuth::class);
     }
 });
