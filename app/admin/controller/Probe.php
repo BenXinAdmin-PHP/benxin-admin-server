@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 10:00:00
-// | @updated   2026-06-13 14:00:00
+// | @updated   2026-06-13 21:30:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -14,15 +14,18 @@ namespace app\admin\controller;
 
 use app\admin\service\ConfigService;
 use app\common\base\BxController;
+use app\common\exception\BusinessException;
 use app\common\exception\PayException;
 use app\common\exception\SmsException;
 use app\common\exception\WechatException;
+use app\common\library\BxJwt;
 use app\common\library\pay\AlipayProvider;
 use app\common\library\pay\WechatPayProvider;
 use app\common\library\sms\SmsAliProvider;
 use app\common\library\sms\SmsTencentProvider;
 use app\common\library\wechat\WechatManager;
 use app\common\model\PayOrder;
+use app\common\model\User;
 use think\Response;
 
 /**
@@ -171,5 +174,30 @@ class Probe extends BxController
                 ),
             ],
         ]);
+    }
+
+    /**
+     * C 端登录令牌签发探针（M5-A）：不依赖真实微信，直接为指定 user_id 经
+     * BxJwt::issueForApi 签发 api guard 双令牌，用于验证 api JwtAuth 放行 / refresh /
+     * logout 黑白名单闭环（真实登录留 M5-B）。
+     * POST /admin/v1/_api_login_probe { user_id }（仅 APP_DEBUG + 后台 JwtAuth）。
+     */
+    public function apiLogin(): Response
+    {
+        $userId = (int) $this->request->param('user_id', 0);
+        if ($userId <= 0) {
+            throw new BusinessException('请提供 user_id');
+        }
+
+        // 校验目标用户存在且启用（与 api JwtAuth/refresh 的取数口径一致）
+        $user = User::where('id', $userId)->where('status', 1)->find();
+        if ($user === null) {
+            throw new BusinessException('C 端用户不存在或已停用');
+        }
+
+        return $this->success(
+            BxJwt::issueForApi((int) $user->id, (int) $user->tenant_id),
+            'api 令牌已签发',
+        );
     }
 }

@@ -5,9 +5,10 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-12 18:00:00
+// | @updated   2026-06-13 21:30:00
 // +----------------------------------------------------------------------
 
+use app\common\middleware\JwtAuth;
 use think\facade\Route;
 use think\middleware\Throttle;
 
@@ -15,6 +16,12 @@ use think\middleware\Throttle;
 // 路由顺序约定：具体 action > /:id > 集合
 Route::group('v1', function () {
     Route::get('ping', 'Ping/index');
+
+    // ---- C 端认证（M5-A，api guard）----
+    // 刷新：自校验 refresh token，不挂 JwtAuth；签发新 access（refresh 不轮换）
+    Route::post('refresh', 'Auth/refresh');
+    // 登出：拉黑当前 access + 撤 refresh 白名单（需登录，挂 api JwtAuth）
+    Route::post('logout', 'Auth/logout')->middleware(JwtAuth::class);
 
     // ---- 微信能力（M4-B）----
     // JSSDK 签名：H5 公众号取签名四元组（懒登录不强制）；公开接口挂限流 60 次/分/IP

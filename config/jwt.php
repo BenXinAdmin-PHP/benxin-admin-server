@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-06-13 21:30:00
 // +----------------------------------------------------------------------
 
 return [
@@ -21,11 +22,12 @@ return [
             'access_ttl'  => (int) env('JWT_ACCESS_TTL', 7200),    // 2h
             'refresh_ttl' => (int) env('JWT_REFRESH_TTL', 1209600), // 14d
         ],
-        // api guard 本步仅预留配置，接口落地见 M5
+        // C 端 api guard（M5-A 落地）：独立 secret + 独立 TTL。
+        // C 端登录态保持久些（提升体验）：access 2h / refresh 30d，均可经 .env 调。
         'api'   => [
             'secret'      => env('JWT_API_SECRET', ''),
-            'access_ttl'  => (int) env('JWT_ACCESS_TTL', 7200),
-            'refresh_ttl' => (int) env('JWT_REFRESH_TTL', 1209600),
+            'access_ttl'  => (int) env('JWT_API_ACCESS_TTL', 7200),    // 2h
+            'refresh_ttl' => (int) env('JWT_API_REFRESH_TTL', 2592000), // 30d
         ],
     ],
 ];

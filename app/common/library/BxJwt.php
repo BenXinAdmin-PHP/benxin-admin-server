@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-06-13 21:30:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -50,6 +51,30 @@ class BxJwt
     // ------------------------------------------------------------------
     // 签发
     // ------------------------------------------------------------------
+
+    /**
+     * C 端（api guard）签发双令牌：先发 refresh（写白名单）再发 access（携 rjti 便于登出反查）。
+     * 供 M5-A 探针与 M5-B 登录流（code2session/oauth + 手机号）统一调用，sub=user_id。
+     *
+     * @param int $userId   C 端用户 id（写入 uid claim）
+     * @param int $tenantId 租户 id（单租户恒 0）
+     * @return array{access_token:string,refresh_token:string,token_type:string,expires_in:int,refresh_expires_in:int}
+     */
+    public static function issueForApi(int $userId, int $tenantId = 0): array
+    {
+        $payload = ['uid' => $userId, 'tenant_id' => $tenantId];
+
+        $refresh = self::issueRefresh('api', $payload);
+        $access  = self::issueAccess('api', $payload, $refresh['jti']);
+
+        return [
+            'access_token'       => $access['token'],
+            'refresh_token'      => $refresh['token'],
+            'token_type'         => 'Bearer',
+            'expires_in'         => $access['expires_in'],
+            'refresh_expires_in' => $refresh['expires_in'],
+        ];
+    }
 
     /**
      * 签发 access token。

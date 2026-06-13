@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-13 11:00:00
+// | @updated   2026-06-13 21:30:00
 // +----------------------------------------------------------------------
 
 use app\admin\middleware\CasbinAuth;
@@ -184,5 +184,7 @@ Route::group('v1', function () {
         Route::get('_pay_probe', 'Probe/pay')->middleware(JwtAuth::class);
         // M4-D 短信探针：配置就绪态 + 双渠道签名构造样例（需登录）
         Route::get('_sms_probe', 'Probe/sms')->middleware(JwtAuth::class);
+        // M5-A C 端登录探针：为 user_id 直签 api 双令牌验证令牌闭环（需登录，不依赖微信）
+        Route::post('_api_login_probe', 'Probe/apiLogin')->middleware(JwtAuth::class);
     }
 });
