@@ -150,6 +150,10 @@ Route::group('v1', function () {
         Route::post('pay-orders/:id/refund', 'Pay/refund')->middleware(CasbinAuth::class, 'system:pay:refund')->pattern(['id' => '\d+']);
         Route::get('pay-orders/:id', 'Pay/read')->middleware(CasbinAuth::class, 'system:pay:list')->pattern(['id' => '\d+']);
         Route::get('pay-orders', 'Pay/index')->middleware(CasbinAuth::class, 'system:pay:list');
+
+        // ---- 短信日志（M4-D，只读；perm: system:sms:log:list）----
+        Route::get('sms-logs/:id', 'SmsLog/read')->middleware(CasbinAuth::class, 'system:sms:log:list')->pattern(['id' => '\d+']);
+        Route::get('sms-logs', 'SmsLog/index')->middleware(CasbinAuth::class, 'system:sms:log:list');
     })->middleware(JwtAuth::class);
 
     // ---- 调试探针（仅调试态注册，生产不暴露）----
@@ -162,5 +166,7 @@ Route::group('v1', function () {
         Route::get('_wechat_probe', 'Probe/wechat')->middleware(JwtAuth::class);
         // M4-C 支付探针：配置就绪态 + 下单参数构造 + 状态机迁移样例（需登录）
         Route::get('_pay_probe', 'Probe/pay')->middleware(JwtAuth::class);
+        // M4-D 短信探针：配置就绪态 + 双渠道签名构造样例（需登录）
+        Route::get('_sms_probe', 'Probe/sms')->middleware(JwtAuth::class);
     }
 });

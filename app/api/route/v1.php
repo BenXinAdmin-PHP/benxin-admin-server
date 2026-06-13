@@ -22,4 +22,8 @@ Route::group('v1', function () {
 
     // ---- 支付回调（M4-C，渠道异步通知，公开不鉴权；安全四件套在 BxPay 收口）----
     Route::post('pay/notify/:channel', 'Pay/notify');
+
+    // ---- 短信验证码（M4-D，懒登录不强制）----
+    // 接口级严格限流防轰炸（1 次/分/IP）；业务多维限流（手机号间隔/天上限）在 SmsCodeService
+    Route::post('sms/code', 'Sms/code')->middleware(Throttle::class, ['visit_rate' => '1/m']);
 });

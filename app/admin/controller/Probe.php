@@ -1,11 +1,11 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   调试探针 — _perm_probe（M1-B）/ _wechat_probe（M4-B）/ _pay_probe（M4-C），仅调试态注册
+// | @mission   调试探针 — _perm/_wechat/_pay/_sms_probe，仅调试态注册
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 10:00:00
-// | @updated   2026-06-13 11:00:00
+// | @updated   2026-06-13 14:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -15,9 +15,12 @@ namespace app\admin\controller;
 use app\admin\service\ConfigService;
 use app\common\base\BxController;
 use app\common\exception\PayException;
+use app\common\exception\SmsException;
 use app\common\exception\WechatException;
 use app\common\library\pay\AlipayProvider;
 use app\common\library\pay\WechatPayProvider;
+use app\common\library\sms\SmsAliProvider;
+use app\common\library\sms\SmsTencentProvider;
 use app\common\library\wechat\WechatManager;
 use app\common\model\PayOrder;
 use think\Response;
@@ -123,6 +126,49 @@ class Probe extends BxController
                 'pending→paid'      => PayOrder::canTransit(PayOrder::STATUS_PENDING, PayOrder::STATUS_PAID),
                 'paid→part_refund'  => PayOrder::canTransit(PayOrder::STATUS_PAID, PayOrder::STATUS_PART_REFUNDED),
                 'refunded→paid(非法)' => PayOrder::canTransit(PayOrder::STATUS_REFUNDED, PayOrder::STATUS_PAID),
+            ],
+        ]);
+    }
+
+    /**
+     * 短信能力探针（M4-D）：配置就绪态 + 双渠道签名构造样例（离线，不触发真实发送）。
+     * 无配置/占位假串时各项以 {ok:false, code:130001} 呈现，整体不报错。
+     */
+    public function sms(): Response
+    {
+        $config = new ConfigService($this->app);
+        $group  = $config->getGroup('sms');
+        $ready  = [];
+        foreach (['sms_channel', 'ali_access_key_id', 'ali_access_key_secret', 'ali_sign_name', 'tencent_secret_id', 'tencent_secret_key', 'tencent_sdk_app_id', 'tencent_sign_name'] as $key) {
+            $ready[$key] = trim((string) ($group[$key] ?? '')) !== '';
+        }
+
+        $attempt = static function (callable $fn): array {
+            try {
+                return ['ok' => true] + $fn();
+            } catch (SmsException $e) {
+                return ['ok' => false, 'code' => $e->bizCode, 'msg' => $e->getMessage()];
+            }
+        };
+
+        return $this->success([
+            'config_ready'    => $ready,
+            'current_channel' => trim((string) ($group['sms_channel'] ?? '')),
+            // 阿里 RPC 签名样例（固定参数 → 可对照算法；不含真实密钥）
+            'ali_rpc_sign_demo' => [
+                'signature' => SmsAliProvider::rpcSignature(
+                    ['AccessKeyId' => 'demo', 'Action' => 'SendSms', 'Format' => 'JSON'],
+                    'demo-secret',
+                ),
+            ],
+            // 腾讯 TC3 StringToSign 样例（结构展示，不含真实密钥）
+            'tencent_tc3_demo' => [
+                'string_to_sign' => SmsTencentProvider::stringToSign(
+                    1551113065,
+                    '2019-02-25',
+                    'sms',
+                    SmsTencentProvider::canonicalRequest('sms.tencentcloudapi.com', 'SendSms', '{}'),
+                ),
             ],
         ]);
     }

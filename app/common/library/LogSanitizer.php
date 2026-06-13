@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 18:00:00
-// | @updated   2026-06-12 18:00:00
+// | @updated   2026-06-13 14:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -28,6 +28,8 @@ class LogSanitizer
         'access_token', 'refresh_token', 'token',
         // M4-B 微信：session_key/js_code 不落日志明文（§8）
         'session_key', 'js_code',
+        // M4-D 短信：手机号/验证码不落日志明文（§8）
+        'mobile', 'phone', 'sms_code', 'verify_code', 'captcha',
     ];
 
     /** 语义匹配（键名含这些片段即视为敏感） */

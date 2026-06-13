@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-13 10:00:00
+// | @updated   2026-06-13 14:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -64,6 +64,15 @@ class ErrorCode
     public const PAY_REFUND_OVERFLOW  = 120008; // 退款金额超可退余额
     public const PAY_CHANNEL_ERROR    = 120099; // 渠道通用错误（透传）
 
+    // 13xxxx 消息/短信业务段（M4-D，§6.2）
+    public const SMS_CONFIG_MISSING = 130001; // 短信配置缺失
+    public const SMS_SEND_FAILED    = 130002; // 短信发送失败
+    public const SMS_CODE_TOO_OFTEN = 130003; // 验证码发送过频（限流）
+    public const SMS_CODE_WRONG     = 130004; // 验证码错误
+    public const SMS_CODE_EXPIRED   = 130005; // 验证码不存在/已过期
+    public const SMS_CODE_LOCKED    = 130006; // 验证码错误次数超限锁定
+    public const SMS_CHANNEL_ERROR  = 130099; // 渠道通用错误（透传）
+
     // 14xxxx 微信业务段（M4-B，§6.2）
     public const WECHAT_CONFIG_MISSING      = 140001; // 微信配置缺失/未配置
     public const WECHAT_TOKEN_FAILED        = 140002; // access_token 获取失败
@@ -100,6 +109,14 @@ class ErrorCode
         self::PAY_REFUND_FAILED   => '退款失败',
         self::PAY_REFUND_OVERFLOW => '退款金额超过可退余额',
         self::PAY_CHANNEL_ERROR   => '支付渠道调用失败',
+
+        self::SMS_CONFIG_MISSING => '短信配置缺失，请先在后台参数配置中完善',
+        self::SMS_SEND_FAILED    => '短信发送失败',
+        self::SMS_CODE_TOO_OFTEN => '验证码获取过于频繁，请稍后再试',
+        self::SMS_CODE_WRONG     => '验证码错误',
+        self::SMS_CODE_EXPIRED   => '验证码不存在或已过期，请重新获取',
+        self::SMS_CODE_LOCKED    => '验证码错误次数过多，请重新获取',
+        self::SMS_CHANNEL_ERROR  => '短信渠道调用失败',
 
         self::WECHAT_CONFIG_MISSING      => '微信配置缺失，请先在后台参数配置中完善',
         self::WECHAT_TOKEN_FAILED        => '微信 access_token 获取失败',
