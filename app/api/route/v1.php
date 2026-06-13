@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-13 21:30:00
+// | @updated   2026-06-13 22:50:00
 // +----------------------------------------------------------------------
 
 use app\common\middleware\JwtAuth;
@@ -16,6 +16,12 @@ use think\middleware\Throttle;
 // 路由顺序约定：具体 action > /:id > 集合
 Route::group('v1', function () {
     Route::get('ping', 'Ping/index');
+
+    // ---- C 端登录（M5-B，双端登录即注册，免登录 + 接口级限流 10/m/IP 防刷）----
+    // 小程序：wx.login code → code2session → 老用户静默 / 新用户 getPhoneNumber 换手机号
+    Route::post('login/mini', 'Login/mini')->middleware(Throttle::class, ['visit_rate' => '10/m']);
+    // H5 公众号：oauth code → openid → 老用户静默 / 新用户短信验证码（限微信环境，UA 判断留 M5-C）
+    Route::post('login/h5', 'Login/h5')->middleware(Throttle::class, ['visit_rate' => '10/m']);
 
     // ---- C 端认证（M5-A，api guard）----
     // 刷新：自校验 refresh token，不挂 JwtAuth；签发新 access（refresh 不轮换）

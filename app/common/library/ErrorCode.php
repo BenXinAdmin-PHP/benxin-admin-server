@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-13 14:00:00
+// | @updated   2026-06-13 22:50:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -73,6 +73,13 @@ class ErrorCode
     public const SMS_CODE_LOCKED    = 130006; // 验证码错误次数超限锁定
     public const SMS_CHANNEL_ERROR  = 130099; // 渠道通用错误（透传）
 
+    // 15xxxx C 端用户/登录业务段（M5-B，§6.2）
+    // 微信错误复用 14xxxx（140005 code2session/140006 oauth/140099 通用）、
+    // 短信验证码错误复用 13xxxx（130004 错/130005 过期/130006 锁定），此段不重复造码。
+    public const LOGIN_NEED_MOBILE = 150001; // 新用户需补充手机号（引导授权/填写）
+    public const LOGIN_DISABLED    = 150002; // 账号已被禁用或注销（status=0 或命中软删行）
+    public const LOGIN_FAILED      = 150099; // 登录失败通用
+
     // 14xxxx 微信业务段（M4-B，§6.2）
     public const WECHAT_CONFIG_MISSING      = 140001; // 微信配置缺失/未配置
     public const WECHAT_TOKEN_FAILED        = 140002; // access_token 获取失败
@@ -117,6 +124,10 @@ class ErrorCode
         self::SMS_CODE_EXPIRED   => '验证码不存在或已过期，请重新获取',
         self::SMS_CODE_LOCKED    => '验证码错误次数过多，请重新获取',
         self::SMS_CHANNEL_ERROR  => '短信渠道调用失败',
+
+        self::LOGIN_NEED_MOBILE => '请补充手机号完成登录',
+        self::LOGIN_DISABLED    => '账号已被禁用或注销',
+        self::LOGIN_FAILED      => '登录失败，请稍后再试',
 
         self::WECHAT_CONFIG_MISSING      => '微信配置缺失，请先在后台参数配置中完善',
         self::WECHAT_TOKEN_FAILED        => '微信 access_token 获取失败',

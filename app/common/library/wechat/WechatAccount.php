@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-12 16:00:00
+// | @updated   2026-06-13 22:50:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -200,6 +201,46 @@ abstract class WechatAccount
             }
 
             return $this->apiGet($path, ['access_token' => $this->accessToken(true)] + $query, $bizCode);
+        }
+    }
+
+    /**
+     * POST 微信接口：access_token 走 query，业务参数走 JSON body（getuserphonenumber 等新版接口）。
+     * errcode≠0 → WechatException（errmsg 透出、errcode 记录）。
+     *
+     * @param array<string,mixed> $body
+     * @param array<string,mixed> $query
+     * @return array<string,mixed>
+     */
+    protected function apiPost(string $path, array $body = [], array $query = [], int $bizCode = ErrorCode::WECHAT_API_ERROR): array
+    {
+        $resp    = $this->http->postJson(self::API_BASE . $path, $body, $query);
+        $errcode = (int) ($resp['errcode'] ?? 0);
+        if ($errcode !== 0) {
+            throw WechatException::fromApi($bizCode, $errcode, (string) ($resp['errmsg'] ?? ''));
+        }
+
+        return $resp;
+    }
+
+    /**
+     * 带全局 access_token POST 微信接口（callWithToken 的 POST 变体）：token 失效
+     * （40001/42001/40014）→ 清缓存强刷 + 重试一次；仍失败抛异常。
+     * 与 callWithToken 共用 access_token 中心化缓存与失效重试语义，仅 HTTP 方法不同。
+     *
+     * @param array<string,mixed> $body
+     * @return array<string,mixed>
+     */
+    protected function callWithTokenPost(string $path, array $body = [], int $bizCode = ErrorCode::WECHAT_API_ERROR): array
+    {
+        try {
+            return $this->apiPost($path, $body, ['access_token' => $this->accessToken()], $bizCode);
+        } catch (WechatException $e) {
+            if (!in_array($e->errcode ?? 0, self::TOKEN_INVALID_CODES, true)) {
+                throw $e;
+            }
+
+            return $this->apiPost($path, $body, ['access_token' => $this->accessToken(true)], $bizCode);
         }
     }
 }
