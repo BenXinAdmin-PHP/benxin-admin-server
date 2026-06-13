@@ -37,4 +37,11 @@ Route::group('v1', function () {
     // ---- 前台公告（M4-D D-2，只读已发布；C 端展示）----
     Route::get('notices/:id', 'Notice/read')->pattern(['id' => '\d+']);
     Route::get('notices', 'Notice/index');
+
+    // ---- 前台内容（M5-A A-2，只读已发布；列表无正文，详情浏览量+1）----
+    Route::get('contents/:id', 'Content/read')->pattern(['id' => '\d+']);
+    Route::get('contents', 'Content/index');
+
+    // ---- 前台广告位（M5-A A-2，启用 + 生效区间，按 position 过滤）----
+    Route::get('banners', 'Banner/index');
 });
