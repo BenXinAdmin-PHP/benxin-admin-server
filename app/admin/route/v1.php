@@ -154,6 +154,22 @@ Route::group('v1', function () {
         // ---- 短信日志（M4-D，只读；perm: system:sms:log:list）----
         Route::get('sms-logs/:id', 'SmsLog/read')->middleware(CasbinAuth::class, 'system:sms:log:list')->pattern(['id' => '\d+']);
         Route::get('sms-logs', 'SmsLog/index')->middleware(CasbinAuth::class, 'system:sms:log:list');
+
+        // ---- 短信模板（M4-D D-2，bx:make 生成路由片段并入；perm: system:sms:template:*）----
+        Route::put('sms-templates/:id/status', 'SmsTemplate/status')->middleware(CasbinAuth::class, 'system:sms:template:update')->pattern(['id' => '\d+']);
+        Route::get('sms-templates/:id', 'SmsTemplate/read')->middleware(CasbinAuth::class, 'system:sms:template:list')->pattern(['id' => '\d+']);
+        Route::put('sms-templates/:id', 'SmsTemplate/update')->middleware(CasbinAuth::class, 'system:sms:template:update')->pattern(['id' => '\d+']);
+        Route::delete('sms-templates/:id', 'SmsTemplate/delete')->middleware(CasbinAuth::class, 'system:sms:template:delete')->pattern(['id' => '\d+']);
+        Route::get('sms-templates', 'SmsTemplate/index')->middleware(CasbinAuth::class, 'system:sms:template:list');
+        Route::post('sms-templates', 'SmsTemplate/save')->middleware(CasbinAuth::class, 'system:sms:template:create');
+
+        // ---- 系统公告（M4-D D-2，bx:make 生成路由片段并入；perm: system:notice:*）----
+        Route::put('notices/:id/status', 'Notice/status')->middleware(CasbinAuth::class, 'system:notice:update')->pattern(['id' => '\d+']);
+        Route::get('notices/:id', 'Notice/read')->middleware(CasbinAuth::class, 'system:notice:list')->pattern(['id' => '\d+']);
+        Route::put('notices/:id', 'Notice/update')->middleware(CasbinAuth::class, 'system:notice:update')->pattern(['id' => '\d+']);
+        Route::delete('notices/:id', 'Notice/delete')->middleware(CasbinAuth::class, 'system:notice:delete')->pattern(['id' => '\d+']);
+        Route::get('notices', 'Notice/index')->middleware(CasbinAuth::class, 'system:notice:list');
+        Route::post('notices', 'Notice/save')->middleware(CasbinAuth::class, 'system:notice:create');
     })->middleware(JwtAuth::class);
 
     // ---- 调试探针（仅调试态注册，生产不暴露）----

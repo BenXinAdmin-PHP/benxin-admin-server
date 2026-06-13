@@ -26,4 +26,8 @@ Route::group('v1', function () {
     // ---- 短信验证码（M4-D，懒登录不强制）----
     // 接口级严格限流防轰炸（1 次/分/IP）；业务多维限流（手机号间隔/天上限）在 SmsCodeService
     Route::post('sms/code', 'Sms/code')->middleware(Throttle::class, ['visit_rate' => '1/m']);
+
+    // ---- 前台公告（M4-D D-2，只读已发布；C 端展示）----
+    Route::get('notices/:id', 'Notice/read')->pattern(['id' => '\d+']);
+    Route::get('notices', 'Notice/index');
 });
