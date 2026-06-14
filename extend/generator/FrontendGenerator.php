@@ -764,10 +764,17 @@ class FrontendGenerator
         $entries = [];
         if ($m->isTree) {
             // 父级 treeSelect（独立勾选 + 虚拟根，复刻 D0 menu）
-            $entries[] = $this->entry([
+            $treePairs = [
                 ['prop', "'{$m->parentField}'"], ['label', "'父级{$m->moduleCn}'"], ['type', "'treeSelect'"],
                 ['checkStrictly', 'true'], ['treeData', 'parentTreeData'], ['defaultValue', '0'],
-            ]);
+            ];
+            // 节点显示字段非默认 'title' 时显式声明 treeProps.label（如 dept=name），
+            // 避免 XFormDrawer 回落 'title' 导致父级标签为空；menu(title) 不输出，产物逐字不变。
+            $treeLabel = $this->treeLabelField();
+            if ($treeLabel !== 'title') {
+                array_splice($treePairs, 3, 0, [['treeProps', "{ label: '{$treeLabel}' }"]]);
+            }
+            $entries[] = $this->entry($treePairs);
         }
 
         foreach ($this->orderedFields((array) ($m->front['formOrder'] ?? [])) as $f) {
