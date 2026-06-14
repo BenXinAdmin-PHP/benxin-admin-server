@@ -20,6 +20,12 @@ class ApiTesterSeeder extends Seeder
 {
     public function run(): void
     {
+        // 生产守门：仅 APP_DEBUG=true 开发态播种测试用户，避免 seed:run 全跑时污染生产
+        if (!app()->isDebug()) {
+            echo "[ApiTesterSeeder] 跳过（仅开发态 APP_DEBUG=true 播种测试用户）。\n";
+            return;
+        }
+
         $now    = date('Y-m-d H:i:s');
         $mobile = '19900000000';
 

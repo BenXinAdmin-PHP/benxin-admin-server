@@ -19,6 +19,12 @@ class TesterSeeder extends Seeder
 {
     public function run(): void
     {
+        // 生产守门：仅 APP_DEBUG=true 开发态播种权限验证样例，避免 seed:run 全跑时污染生产
+        if (!app()->isDebug()) {
+            echo "[TesterSeeder] 跳过（仅开发态 APP_DEBUG=true 播种测试角色/账号）。\n";
+            return;
+        }
+
         $now = date('Y-m-d H:i:s');
 
         // 普通角色 tester（无任何权限策略）
