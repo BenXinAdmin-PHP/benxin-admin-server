@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-06-14
 // +----------------------------------------------------------------------
 
 use think\facade\Db;
@@ -68,6 +69,15 @@ class AuthSeeder extends Seeder
         if ($pwd === '') {
             echo "[AuthSeeder] 跳过超管账号：.env SUPER_ADMIN_INIT_PWD 为空，请配置后重跑。\n";
         } else {
+            // 方案 A：超管账号已存在时不静默跳过，明确提示密码未更新（ensure 不更新既有行）
+            $existingAdminId = (int) Db::name('admin')
+                ->where(['tenant_id' => 0, 'username' => 'admin'])
+                ->whereNull('deleted_at')
+                ->value('id');
+            if ($existingAdminId > 0) {
+                echo "[AuthSeeder] 超管账号 admin 已存在，未更新密码；如需重置请用改密接口或先删除该账号重跑。\n";
+            }
+
             $adminId = $this->ensure('admin', ['tenant_id' => 0, 'username' => 'admin'], [
                 'tenant_id'  => 0,
                 'username'   => 'admin',
