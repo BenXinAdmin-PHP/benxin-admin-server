@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-12 10:00:00
+// | @updated   2026-06-14 10:00:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -29,6 +29,9 @@ use think\facade\Db;
  * 以及前端产物（M3-D1：列表页 + 编辑表单 + 分配弹窗 + api 薄壳，复刻 web 仓 D0 黄金样板）。
  *
  *   php think bx:make bx_post --config=extend/generator/configs/post.php --output=runtime/generated/post --dry-run
+ *
+ * 保真回归（防污染硬门）：bash tests/generator-baseline/verify.sh
+ *   重生成八标的与 tests/generator-baseline/ 基线逐字比对（忽略 @date），证明「生成 == 黄金样板」。
  *
  * 选项：
  *   --config  模块元数据 PHP 文件（return array）；缺省按表结构推导
