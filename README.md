@@ -15,7 +15,11 @@
 
 </div>
 
-<!-- 截图占位：登录页 / 菜单管理 / 代码生成器运行 / C 端小程序 -->
+![BenXinAdmin 极光渐变登录页](docs/screenshots/login-aurora.png)
+
+![BenXinAdmin 后台 Bento 数据仪表盘首页](docs/screenshots/dashboard-bento.png)
+
+![BenXinAdmin 后台 5 套可切换主题 + 明暗模式面板](docs/screenshots/theme-panel.png)
 
 ---
 
@@ -29,6 +33,10 @@
 
 ### 🏗️ 代码生成器护城河
 一条 `php think bx:make` 从**表结构**直出**全栈产物**：后端四件套（Model / Controller / Service / Validate）+ 路由 + 菜单权限 seeder + 前端列表页 / 编辑表单 / 分配弹窗 / API 薄壳。覆盖**四种范式**——纯 CRUD、树形（递归 CTE 或内存建树）、授权链路（角色分配菜单 + Casbin 同步 + 事务回滚）、数据权限。**「生成 == 手写黄金样板」逐字保真**，回归基线随仓可复现：`bash tests/generator-baseline/verify.sh`。
+
+<img src="docs/screenshots/generator-make.png" alt="php think bx:make 从表结构直出后端四件套 + 路由 + seeder + 前端全栈产物" width="760" />
+
+<img src="docs/screenshots/generator-verify.png" alt="verify.sh 八标的防污染保真回归全绿（生成 == 黄金样板，仅 @date 差）" width="760" />
 
 ### 🍖 吃狗粮闭环
 生成器不是玩具——真实业务（内容、系统公告等）就是 `bx:make` 生成的。「先手写黄金样板 → 暴露缺口回炉生成器 → 业务模块零手工自动复刻」闭环成立：例如富文本净化能力，手写内容模块沉淀 → 回炉进生成器 → 系统公告模块自动复用，零手工接线。
