@@ -121,6 +121,41 @@ php think run -p 8801
 curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
 ```
 
+> 上面是**方式一：Docker 依赖（默认）**——只把 MySQL + Valkey 跑在容器里（建议 Mac OrbStack），PHP/框架仍跑本机。不想装 Docker 也可走下面的方式二。
+
+### 方式二：本地裸装依赖（不用 Docker）
+
+不依赖 Docker，把 MySQL 8 与 Valkey（或 Redis，协议兼容）直接装在本机。**生产环境本就是裸机 + 宝塔 + SafeLine（见 §12 / `docs/ARCHITECTURE.md`），裸装即贴近生产形态。**
+
+```bash
+# 1. 本地安装并启动依赖（任选其一的安装方式）
+#    MySQL 8：建库 benxin_admin（utf8mb4），建账号或用 root
+#    Valkey（推荐，BSD-3）或 Redis（协议兼容，二选一即可）
+#    macOS 示例：brew install mysql valkey && brew services start mysql && brew services start valkey
+
+# 2. 环境变量：指向本地实例（裸装走默认端口 3306 / 6379）
+cp .env.example .env
+#   .env.example 默认是 Docker 方式的端口（MySQL 3308 / Valkey 6380），裸装请改回默认：
+#     DB_HOST=127.0.0.1   DB_PORT=3306   DB_NAME=benxin_admin   DB_USER/DB_PASS=<你的账号>
+#     REDIS_HOST=127.0.0.1  REDIS_PORT=6379   REDIS_PASSWORD=<如设了密码>
+#   端口以 .env 为准；二者差异只在 DB_PORT/REDIS_PORT，其余键名一致。
+#   仍必填：SUPER_ADMIN_INIT_PWD / JWT_ADMIN_SECRET / JWT_API_SECRET / CONFIG_CRYPT_KEY（同方式一）
+
+# 3. 安装 PHP 依赖（生产 PHP 8.4 直接装；本地若为 PHP 8.1~8.3 临时忽略平台校验）
+composer install                              # 生产 PHP 8.4
+# composer install --ignore-platform-req=php  # 本地 PHP 8.2 妥协，生产无此项
+
+# 4. 建表 + 业务种子（超管 / 菜单 / 字典 / Casbin / 各模块 perms）
+php think migrate:run
+php think seed:run
+
+# 5. 起服务（独占 8801）
+php think run -p 8801
+curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
+```
+
+随后登录与首登改密同方式一，见下方 **[首次登录后台](#首次登录后台)**。
+
 > ### 🔴 安全必读
 > 1. **`SUPER_ADMIN_INIT_PWD` 不设则不创建超管账号**——本底座**无任何默认弱口令**，部署者必须显式设置强密码（超管 `admin` 密码即此值，Argon2id 入库；首登后请立即改密）。
 > 2. **生产务必 `APP_DEBUG=false`**（`.env.example` 已默认 false）——调试探针与测试种子均靠它守门，生产不暴露。
