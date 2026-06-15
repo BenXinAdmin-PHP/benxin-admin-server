@@ -51,4 +51,36 @@ class StorageManager
     {
         return (string) (new ConfigService(app()))->get('storage_driver', 'local');
     }
+
+    /**
+     * 多路存储路由扩展点（ADR-18，M-素材-A）：按 media_type 选驱动返回存储实例。
+     *
+     * ★本步（M-素材-A）一律返回本地驱动 —— 纯本地零云配置即可完整跑通素材管理
+     *   （守 §1 底座可独立运行、不默认强依赖任何付费云服务）。
+     * 云分支留骨架（throw 未实现 + TODO 锚点），M-素材-B/C 据此落地，
+     *   **不改动既有 driver() 行为（M2-D 文件管理沿用）**。
+     */
+    public static function forMediaType(string $mediaType): StorageInterface
+    {
+        $driver = self::driverNameForMediaType($mediaType);
+
+        return match ($driver) {
+            'local' => new LocalStorage(),
+            // TODO M-素材-B：image→QiniuStorage / document·archive→OssStorage（按 bx_config 开通后路由）
+            // TODO M-素材-C：video·audio→阿里 VOD / 腾讯 VOD（ADR-19，客户端直传 + 转码回调）
+            default => throw new \RuntimeException("存储驱动 [{$driver}] 尚未实现（media_type={$mediaType}，留 M-素材-B/C）"),
+        };
+    }
+
+    /**
+     * 按 media_type 解析驱动名（写入 bx_resource.storage）。
+     *
+     * ★本步全部本地。M-素材-B/C 在此读 bx_config（group=storage）的按类型驱动开关：
+     *   image→qiniu / document·archive→oss / video·audio→alivod·tencentvod（开通才启用，缺省 local）。
+     */
+    public static function driverNameForMediaType(string $mediaType): string
+    {
+        // M-素材-A：零云配置，全部本地。
+        return 'local';
+    }
 }
