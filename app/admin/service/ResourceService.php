@@ -138,12 +138,22 @@ class ResourceService extends BxService
         $total = $query->count();
         $list  = $query->page($page, $pageSize)->select()->toArray();
 
+        // 取数适配（M-素材-B）：url 实时解析——local→raw 代理路由；云→实时签名 URL
+        // （不用落库的过期值，签名 URL 实时签发不缓存，§4/§7）
+        foreach ($list as &$row) {
+            $row['url'] = $this->resolveUrl((string) $row['storage'], (int) $row['id'], (string) $row['path']);
+        }
+        unset($row);
+
         return ['list' => $list, 'total' => $total];
     }
 
     public function detail(int $id): Resource
     {
-        return Resource::findOrFail($id);
+        $record      = Resource::findOrFail($id);
+        $record->url = $this->resolveUrl((string) $record->storage, (int) $record->id, (string) $record->path);
+
+        return $record;
     }
 
     /**
@@ -231,10 +241,17 @@ class ResourceService extends BxService
         $fileName = str_replace('-', '', Uuid::v4()) . '.' . $ext;
         $saveName = 'resources/' . $mediaType . '/' . date('Y/m') . '/' . $fileName;
 
-        // 5) 按 media_type 路由存储（本步全部 local），经驱动落地
-        $storage     = StorageManager::forMediaType($mediaType);
+        // 5) 按 media_type 路由存储（image→qiniu / document·archive→oss / video·audio→local；
+        //    配置不全自动回退 local，driverNameForMediaType 与 forMediaType 解析一致）。
+        //    ★云 put 失败不落库（不留半条记录）；本地临时文件由框架请求末自动清理。
         $storageName = StorageManager::driverNameForMediaType($mediaType);
-        $storedPath  = $storage->put($file->getRealPath(), $saveName);
+        $storage     = StorageManager::forMediaType($mediaType);
+        try {
+            $storedPath = $storage->put($file->getRealPath(), $saveName);
+        } catch (\Throwable $e) {
+            Log::error('[ResourceService] 素材落地失败 driver=' . $storageName . '：' . $e->getMessage());
+            throw new BusinessException('素材上传到存储失败，请稍后重试或检查云存储配置');
+        }
 
         // 6) 入库（create_by/create_dept 由 BxModel 钩子自动填充；VOD 字段留默认，本地 transcode_status=0）
         $originalName = mb_substr((string) $file->getOriginalName(), 0, 255);
@@ -255,18 +272,20 @@ class ResourceService extends BxService
             'transcode_status' => 0,
         ]);
 
-        // 7) 访问 URL：本地走后端受控取流路由；云驱动走 storage->url
-        $url = $storageName === 'local'
+        // 7) 回填 url 列为「稳定标识」：local→后端 raw 代理路由；云→存储 key（path），
+        //    取数时按 storage 实时签名（签名 URL 会过期，故列里存的是可重签的稳定值，§4 标红）
+        $record->url = $storageName === 'local'
             ? '/admin/v1/resources/' . $record->id . '/raw'
-            : $storage->url($storedPath);
-        $record->url = $url;
+            : $storedPath;
         $record->save();
 
         return [
             'id'         => (int) $record->id,
             'name'       => $record->name,
             'media_type' => $mediaType,
-            'url'        => $url,
+            'storage'    => $storageName,
+            // 响应即时可用 URL：云=实时签名 URL、local=raw 路由
+            'url'        => $this->resolveUrl($storageName, (int) $record->id, $storedPath),
             'size'       => $size,
             'mime'       => $mime,
             'ext'        => $ext,
@@ -274,27 +293,38 @@ class ResourceService extends BxService
     }
 
     /**
-     * 受控取流：返回文件内容 + mime + 原名（仅本地驱动；本地音视频播放靠它）。
+     * 受控取流目标（M-素材-B 适配，按 storage 分流）：
+     *  - local      → 返回文件内容流（inline 输出，本地音视频播放靠它）
+     *  - oss/qiniu  → 返回 302 重定向目标（实时签名 URL，前端/浏览器直连云、不经后端扛流量，ADR-18）
      *
-     * @return array{content:string,mime:string,name:string}
+     * @return array{type:string,content?:string,mime?:string,name?:string,url?:string}
      */
-    public function readable(int $id): array
+    public function rawTarget(int $id): array
     {
-        $record = Resource::findOrFail($id);
-        if ((string) $record->storage !== 'local') {
-            throw new BusinessException('该素材由云存储托管，请用其公网 URL 访问');
+        $record  = Resource::findOrFail($id);
+        $storage = (string) $record->storage;
+
+        if ($storage === 'local') {
+            $local = new LocalStorage();
+            if (!$local->exists((string) $record->path)) {
+                throw new BusinessException('素材文件不存在或已被清理');
+            }
+
+            return [
+                'type'    => 'local',
+                'content' => (string) file_get_contents($local->absolutePath((string) $record->path)),
+                'mime'    => (string) $record->mime,
+                'name'    => (string) $record->original_name,
+            ];
         }
 
-        $local = new LocalStorage();
-        if (!$local->exists((string) $record->path)) {
-            throw new BusinessException('素材文件不存在或已被清理');
+        // 云：302 到实时签名 URL（签发失败直接报错，不回退避免重定向环）
+        $url = $this->signCloudUrl($storage, (string) $record->path);
+        if ($url === '') {
+            throw new BusinessException('素材访问地址签发失败，请检查云存储配置');
         }
 
-        return [
-            'content' => (string) file_get_contents($local->absolutePath((string) $record->path)),
-            'mime'    => (string) $record->mime,
-            'name'    => (string) $record->original_name,
-        ];
+        return ['type' => 'redirect', 'url' => $url];
     }
 
     /**
@@ -395,5 +425,36 @@ class ResourceService extends BxService
         }
 
         return array_values(array_diff($list, self::PERMANENT_DENY));
+    }
+
+    /**
+     * 解析素材访问 URL（取数路径用，M-素材-B）：
+     *  - local      → 后端 raw 代理路由
+     *  - oss/qiniu  → 实时签名 URL；签名失败回退 raw 路由（raw 再做 302 托底，不让单条坏数据拖垮列表）
+     */
+    protected function resolveUrl(string $storage, int $id, string $path): string
+    {
+        if ($storage === 'oss' || $storage === 'qiniu') {
+            $signed = $this->signCloudUrl($storage, $path);
+            if ($signed !== '') {
+                return $signed;
+            }
+        }
+
+        return '/admin/v1/resources/' . $id . '/raw';
+    }
+
+    /**
+     * 实时签发云存储签名 URL（私有 bucket/空间，带有效期）；异常返回空串交调用方决定回退/报错。
+     */
+    protected function signCloudUrl(string $driverName, string $path): string
+    {
+        try {
+            return StorageManager::makeByName($driverName)->url($path);
+        } catch (\Throwable $e) {
+            Log::warning('[ResourceService] 云签名 URL 失败 driver=' . $driverName . '：' . $e->getMessage());
+
+            return '';
+        }
     }
 }

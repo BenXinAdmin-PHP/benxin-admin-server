@@ -40,16 +40,21 @@ class Resource extends BxController
     }
 
     /**
-     * 受控取流（后端输出；本地素材不可被当脚本执行/直链访问，音视频播放靠它）。
+     * 受控取流（按 storage 分流）：本地→后端 inline 输出（音视频播放靠它）；
+     * 云(oss/qiniu)→302 重定向到实时签名 URL（浏览器直连云，不经后端扛流量，ADR-18）。
      * GET /admin/v1/resources/:id/raw
      */
     public function raw(int $id): Response
     {
-        $info = (new ResourceService($this->app))->readable($id);
+        $target = (new ResourceService($this->app))->rawTarget($id);
 
-        return Response::create($info['content'])
-            ->contentType($info['mime'])
-            ->header(['Content-Disposition' => 'inline; filename="' . rawurlencode($info['name']) . '"']);
+        if (($target['type'] ?? '') === 'redirect') {
+            return redirect((string) $target['url']);
+        }
+
+        return Response::create($target['content'])
+            ->contentType($target['mime'])
+            ->header(['Content-Disposition' => 'inline; filename="' . rawurlencode($target['name']) . '"']);
     }
 
     /**
