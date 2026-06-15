@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 10:00:00
-// | @updated   2026-06-12 18:00:00
+// | @updated   2026-06-15 (M3-G: model $hidden 默认并入 tenant_id)
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -280,6 +280,11 @@ class Generator
     private function hidden(): string
     {
         $parts = ["'deleted_at'"];
+        // tenant_id 是框架内部多租户维度字段，与 deleted_at 同理不该对外（最小暴露）；
+        // 按列存在性判定，表含该列才隐藏（纯日志/关联表无此列不加）。
+        if (in_array('tenant_id', array_column($this->meta->allColumns, 'name'), true)) {
+            $parts[] = "'tenant_id'";
+        }
         foreach ($this->meta->sensitiveFields as $f) {
             $parts[] = "'{$f}'";
         }

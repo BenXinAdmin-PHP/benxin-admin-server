@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-13 21:30:00
+// | @updated   2026-06-15 18:30:00
 // +----------------------------------------------------------------------
 
 use app\admin\middleware\CasbinAuth;
@@ -144,6 +144,29 @@ Route::group('v1', function () {
         Route::delete('banners/:id', 'Banner/delete')->middleware(CasbinAuth::class, 'content:banner:delete')->pattern(['id' => '\d+']);
         Route::get('banners', 'Banner/index')->middleware(CasbinAuth::class, 'content:banner:list');
         Route::post('banners', 'Banner/save')->middleware(CasbinAuth::class, 'content:banner:create');
+
+        // ---- 素材管理（M-素材-A）----
+        // 素材分类（bx:make 树形产出；perm: system:resource:category:*）
+        Route::get('resource-categories/tree', 'ResourceCategory/tree')->middleware(CasbinAuth::class, 'system:resource:category:list');
+        Route::put('resource-categories/:id/status', 'ResourceCategory/status')->middleware(CasbinAuth::class, 'system:resource:category:update')->pattern(['id' => '\d+']);
+        Route::get('resource-categories/:id', 'ResourceCategory/read')->middleware(CasbinAuth::class, 'system:resource:category:list')->pattern(['id' => '\d+']);
+        Route::put('resource-categories/:id', 'ResourceCategory/update')->middleware(CasbinAuth::class, 'system:resource:category:update')->pattern(['id' => '\d+']);
+        Route::delete('resource-categories/:id', 'ResourceCategory/delete')->middleware(CasbinAuth::class, 'system:resource:category:delete')->pattern(['id' => '\d+']);
+        Route::post('resource-categories', 'ResourceCategory/save')->middleware(CasbinAuth::class, 'system:resource:category:create');
+
+        // 素材（bx:make 纯 CRUD 产出 + 手工槽 upload/raw/batch；perm: system:resource:*）
+        // 手工槽在前（具体 action > /:id > 集合）：批量删 batch 在 delete /:id 前
+        Route::post('resources/upload', 'Resource/upload')->middleware(CasbinAuth::class, 'system:resource:upload');
+        // VOD 客户端直传（M-素材-C）：签发上传凭证 + 直传完成回填落库（复用 upload 权限）
+        Route::post('resources/vod/upload-sign', 'Resource/vodUploadSign')->middleware(CasbinAuth::class, 'system:resource:upload');
+        Route::post('resources/vod/confirm', 'Resource/vodConfirm')->middleware(CasbinAuth::class, 'system:resource:upload');
+        Route::delete('resources/batch', 'Resource/batchDelete')->middleware(CasbinAuth::class, 'system:resource:delete');
+        Route::get('resources/:id/raw', 'Resource/raw')->middleware(CasbinAuth::class, 'system:resource:list')->pattern(['id' => '\d+']);
+        Route::get('resources/:id', 'Resource/read')->middleware(CasbinAuth::class, 'system:resource:list')->pattern(['id' => '\d+']);
+        Route::put('resources/:id', 'Resource/update')->middleware(CasbinAuth::class, 'system:resource:update')->pattern(['id' => '\d+']);
+        Route::delete('resources/:id', 'Resource/delete')->middleware(CasbinAuth::class, 'system:resource:delete')->pattern(['id' => '\d+']);
+        Route::get('resources', 'Resource/index')->middleware(CasbinAuth::class, 'system:resource:list');
+        Route::post('resources', 'Resource/save')->middleware(CasbinAuth::class, 'system:resource:create');
 
         // ---- 支付订单管理（M4-C，手写；只读 + 退款）----
         // 退款为敏感操作（perm: system:pay:refund + 二次确认）；列表/详情只读（perm: system:pay:list）

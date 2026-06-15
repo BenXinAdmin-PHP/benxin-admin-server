@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-13 22:50:00
+// | @updated   2026-06-15 18:30:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -46,6 +46,10 @@ class ErrorCode
 
     // 422xxx 业务校验
     public const VALIDATE_FAIL = 422000;
+    // 素材管理（M-素材-A，ADR-18，§6.2 固化）：白名单外文件类型
+    public const RESOURCE_UNSUPPORTED_TYPE = 422100; // 不支持的文件类型
+    // 素材 VOD（M-素材-C，ADR-19）：VOD 未开通/配置不全（上传凭证签发拒绝）
+    public const RESOURCE_VOD_NOT_READY = 422101; // VOD 未开通或配置不全
 
     // 429xxx 限流
     public const TOO_MANY_REQUESTS = 429000;
@@ -104,6 +108,8 @@ class ErrorCode
         self::FORBIDDEN         => '没有访问权限',
         self::NOT_FOUND         => '请求的资源不存在',
         self::VALIDATE_FAIL     => '数据校验失败',
+        self::RESOURCE_UNSUPPORTED_TYPE => '不支持的文件类型',
+        self::RESOURCE_VOD_NOT_READY    => 'VOD 点播未开通或配置不全，请在后台参数配置中完善',
         self::TOO_MANY_REQUESTS => '请求过于频繁，请稍后再试',
         self::SERVER_ERROR      => '服务器开小差了，请稍后再试',
 

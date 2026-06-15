@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-14 10:00:00
+// | @updated   2026-06-15 18:30:00
 // +----------------------------------------------------------------------
 
 use app\common\middleware\JwtAuth;
@@ -39,6 +39,9 @@ Route::group('v1', function () {
 
     // ---- 支付回调（M4-C，渠道异步通知，公开不鉴权；安全四件套在 BxPay 收口）----
     Route::post('pay/notify/:channel', 'Pay/notify');
+
+    // ---- VOD 转码回调（M-素材-C，腾讯云异步通知，公开不鉴权；安全四件套在 BxVod 收口）----
+    Route::post('resource/vod/notify', 'ResourceVod/notify');
 
     // ---- 短信验证码（M4-D，懒登录不强制）----
     // 接口级严格限流防轰炸（1 次/分/IP）；业务多维限流（手机号间隔/天上限）在 SmsCodeService

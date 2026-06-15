@@ -20,7 +20,7 @@ class Dept extends BxModel
 {
     protected $name = 'dept';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'        => 'integer',

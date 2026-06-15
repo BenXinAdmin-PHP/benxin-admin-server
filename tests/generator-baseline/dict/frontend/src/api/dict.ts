@@ -12,7 +12,6 @@ import { request, type ApiEnvelope, type PageResult } from '@/utils/request'
 /** 字典类型行（列表/详情共用） */
 export interface DictItem {
   id: number
-  tenant_id: number
   name: string
   type: string
   status: number

@@ -20,7 +20,7 @@ class Post extends BxModel
 {
     protected $name = 'post';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'        => 'integer',

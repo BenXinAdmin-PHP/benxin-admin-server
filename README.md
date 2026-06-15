@@ -32,7 +32,7 @@
 ## ✨ 核心特性
 
 ### 🏗️ 代码生成器护城河
-一条 `php think bx:make` 从**表结构**直出**全栈产物**：后端四件套（Model / Controller / Service / Validate）+ 路由 + 菜单权限 seeder + 前端列表页 / 编辑表单 / 分配弹窗 / API 薄壳。覆盖**四种范式**——纯 CRUD、树形（递归 CTE 或内存建树）、授权链路（角色分配菜单 + Casbin 同步 + 事务回滚）、数据权限。**「生成 == 手写黄金样板」逐字保真**，回归基线随仓可复现：`bash tests/generator-baseline/verify.sh`。
+一条 `php think bx:make` 从**表结构**直出**全栈产物**：后端四件套（Model / Controller / Service / Validate）+ 路由 + 菜单权限 seeder + 前端列表页 / 编辑表单 / 分配弹窗 / API 薄壳。覆盖**三类范式**——纯 CRUD、树形（递归 CTE 或内存建树）、授权链路（角色分配菜单 + Casbin 同步 + 事务回滚）；数据权限（五档）作为横切能力贯穿其中（任何模块按需挂 `applyDataScope`，非独立复刻范式）。**「生成 == 手写黄金样板」逐字保真**，回归基线随仓可复现：`bash tests/generator-baseline/verify.sh`。
 
 <img src="docs/screenshots/generator-make.png" alt="php think bx:make 从表结构直出后端四件套 + 路由 + seeder + 前端全栈产物" width="760" />
 
@@ -121,10 +121,49 @@ php think run -p 8801
 curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
 ```
 
+> 上面是**方式一：Docker 依赖（默认）**——只把 MySQL + Valkey 跑在容器里（建议 Mac OrbStack），PHP/框架仍跑本机。不想装 Docker 也可走下面的方式二。
+
+### 方式二：本地裸装依赖（不用 Docker）
+
+不依赖 Docker，把 MySQL 8 与 Valkey（或 Redis，协议兼容）直接装在本机。**生产环境本就是裸机 + 宝塔 + SafeLine（见 §12 / `docs/ARCHITECTURE.md`），裸装即贴近生产形态。**
+
+```bash
+# 1. 本地安装并启动依赖（任选其一的安装方式）
+#    MySQL 8：建库 benxin_admin（utf8mb4），建账号或用 root
+#    Valkey（推荐，BSD-3）或 Redis（协议兼容，二选一即可）
+#    macOS 示例：brew install mysql valkey && brew services start mysql && brew services start valkey
+
+# 2. 环境变量：指向本地实例（裸装走默认端口 3306 / 6379）
+cp .env.example .env
+#   .env.example 默认是 Docker 方式的端口（MySQL 3308 / Valkey 6380），裸装请改回默认：
+#     DB_HOST=127.0.0.1   DB_PORT=3306   DB_NAME=benxin_admin   DB_USER/DB_PASS=<你的账号>
+#     REDIS_HOST=127.0.0.1  REDIS_PORT=6379   REDIS_PASSWORD=<如设了密码>
+#   端口以 .env 为准；二者差异只在 DB_PORT/REDIS_PORT，其余键名一致。
+#   仍必填：SUPER_ADMIN_INIT_PWD / JWT_ADMIN_SECRET / JWT_API_SECRET / CONFIG_CRYPT_KEY（同方式一）
+
+# 3. 安装 PHP 依赖（生产 PHP 8.4 直接装；本地若为 PHP 8.1~8.3 临时忽略平台校验）
+composer install                              # 生产 PHP 8.4
+# composer install --ignore-platform-req=php  # 本地 PHP 8.2 妥协，生产无此项
+
+# 4. 建表 + 业务种子（超管 / 菜单 / 字典 / Casbin / 各模块 perms）
+php think migrate:run
+php think seed:run
+
+# 5. 起服务（独占 8801）
+php think run -p 8801
+curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
+```
+
+随后登录与首登改密同方式一，见下方 **[首次登录后台](#首次登录后台)**。
+
 > ### 🔴 安全必读
 > 1. **`SUPER_ADMIN_INIT_PWD` 不设则不创建超管账号**——本底座**无任何默认弱口令**，部署者必须显式设置强密码（超管 `admin` 密码即此值，Argon2id 入库；首登后请立即改密）。
 > 2. **生产务必 `APP_DEBUG=false`**（`.env.example` 已默认 false）——调试探针与测试种子均靠它守门，生产不暴露。
 > 3. 三方密钥（支付 / 短信 / OSS）**AES 加密入库、不进仓库**；`.env` 已在 `.gitignore`，**严禁提交真实密钥**。
+
+### 📦 素材上传 / 存储部署
+
+素材模块（`bx_resource`）的本地落点、安全加固、大文件 `php.ini` 配置、云存储 / VOD 开通，统一见下方专章 **[素材存储部署指南](#-素材存储部署指南)**。
 
 ### 首次登录后台
 
@@ -144,6 +183,71 @@ curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
 - 首次起容器后再改 `DB_PORT`/账号需 `docker compose down -v` 清卷重起，让 MySQL 按新 `.env` 重新初始化。
 
 </details>
+
+---
+
+## 🗄 素材存储部署指南
+
+> 素材模块（`bx_resource`）的部署运维须知：默认**纯本地零配置**即可完整跑通；云存储 / VOD 全是**可选扩展**，本底座**不默认强依赖任何付费云服务**（守开源边界）。
+
+### 本地存储（默认，零配置）
+
+- **物理落点**：本地素材存项目根 **`storage/`** 目录（`root_path()/storage`，在 Web 根 `public/` **之外**，URL 无法直链、不可执行）；上传文件 **uuid 重命名**（防穿越 / 覆盖 / 伪装可执行），`realpath` 校验防目录穿越。
+- **受控取流**：素材访问统一走后端**鉴权取流路由** `GET /admin/v1/resources/:id/raw`（`CasbinAuth` + `system:resource:list` 权限），**不裸公网直链**；文件管理模块同理 `GET /admin/v1/files/:id/raw`。
+- **默认即用**：不配任何云即完整可用——素材分类树 + 全类型上传 / 取流 / 批量删开箱即跑。
+
+### 安全配置（部署侧加固，§8 安全基线落地）
+
+- **目录隔离（第二道防线）**：`storage/` 必须在 `public/` 之外。生产 Nginx 确保 `storage/` **不暴露为静态目录、不解析 PHP**——即便上传白名单已拦可执行文件，目录隔离仍是兜底。示例：
+
+  ```nginx
+  # 站点根指向 public/，素材目录 storage/ 在其外，URL 天然不可达
+  root /path/to/benxin-admin-server/public;
+
+  # 双保险：显式拒绝 storage/ 直链（即便误把目录纳入可达范围）
+  location ^~ /storage/ { deny all; return 404; }
+
+  # PHP 仅在 public 内解析；storage/ 不经 fastcgi，绝不执行
+  location ~ \.php$ {
+      fastcgi_pass   127.0.0.1:9000;
+      fastcgi_index  index.php;
+      include        fastcgi_params;
+  }
+  ```
+
+- **目录权限**：`storage/` 对 PHP 进程**可读写、不可执行**。
+- **上传白名单（程序行为，恒生效）**：按 `media_type` 分组的**扩展名白名单**（非黑名单）+ `finfo` 真实 MIME 双重校验 + **`PERMANENT_DENY` 黑名单恒覆盖配置**——`php / phtml / phar / exe / sh / bat / js / mjs / html / htm / svg / jsp / asp / ...` 等可执行或可内联脚本类型**永久排除**，即便管理员误配白名单也拒绝。**切勿尝试在配置里放开这些可执行扩展名。**
+
+### 大文件上传配置
+
+素材的 **local / 七牛 / 阿里 OSS 上传走服务端中转**，受 PHP 上传限额约束。PHP 默认 `post_max_size=8M` / `upload_max_filesize=2M` 偏小，中大文件（视频、大图）会**在进入应用前被 PHP 拒绝**。素材 app 层上限为 **100MB**（`ResourceService::MAX_SIZE`），生产需调大 `php.ini`（值 ≥ 100MB，超限请求才会走到 app 层返回 422，而非被 PHP 直接拒）：
+
+```ini
+post_max_size = 100M
+upload_max_filesize = 100M
+```
+
+- 改后重启 PHP / `php think run`；裸机 + 宝塔在面板「PHP → 配置修改」处调 `post_max_size` / `upload_max_filesize`。
+- **前端常量对齐**：web 端有上传前大小预判常量 `RESOURCE_MAX_UPLOAD_MB`（`src/api/resource.ts`，当前 **100**，已与 app 层 100MB 对齐）；若调整 app 层 / php.ini 上限，请同步改该常量，否则前端会按旧值提前拦截。
+- **大视频推荐 VOD 客户端直传**：开通腾讯云 VOD 后，大视频由浏览器经官方 SDK **直传腾讯云、不经 PHP / 服务端中转**，无 php.ini 限额；服务端中转（local / OSS / 七牛）始终受其约束。
+
+### 云存储 / VOD 开通（可选扩展，默认关闭）
+
+> ★ 云存储（阿里 OSS / 七牛）与 VOD（腾讯云）**全是默认关闭的可选扩展**，纯本地零配置即可完整跑通素材管理。开通在后台 **「参数配置」（`group=storage`）** 配 driver + 密钥（敏感项 **AES 加密入库**，展示脱敏）。
+
+- **按 `media_type` 真路由**（缺省全 `local`）：图片 → 七牛、文档 / 压缩包 → 阿里 OSS、音视频 → 本地或腾讯 VOD。
+- **未开通自动回退 local**：选了云 driver 但对应必填配置不全，自动回退 `local` 并 `Log::warning`，**不影响默认使用**（配置不全不挂）。
+- **签名 URL**：云资源走**私有 bucket + 带有效期签名 URL**（默认 **3600s**，实时签发、过期失效，故不缓存落库），不裸公网直链。
+
+已落地的 `bx_config` 配置项（`group=storage`）：
+
+| 用途 | 驱动开关 | 必填密钥 |
+|---|---|---|
+| 七牛（图片） | `storage_driver_image=qiniu` | `qiniu_access_key` / `qiniu_secret_key` / `qiniu_bucket` / `qiniu_domain`（可选 `qiniu_url_expire`，默认 3600） |
+| 阿里 OSS（文档 / 压缩包） | `storage_driver_document=oss`、`storage_driver_archive=oss` | `oss_access_key_id` / `oss_access_key_secret` / `oss_endpoint` / `oss_bucket`（可选 `oss_url_expire`，默认 3600） |
+| 腾讯 VOD（音视频） | `storage_driver_video=vod_tx`、`storage_driver_audio=vod_tx` | `vod_tx_secret_id` / `vod_tx_secret_key` / `vod_tx_sub_app_id`（齐全才视「已开通」）+ `vod_tx_callback_key`（回调验签）/ `vod_tx_procedure`（转码模板） |
+
+- **VOD 真实接入提示**：需配**真实腾讯云凭据** + 转码回调域名；转码回调走**共享密钥验签**（`vod_tx_callback_key`），真实接入可按业务扩展 ConfirmEvents。**PlayAuth 防盗链播放**留上层业务扩展（v1 仅返回播放 URL）。
 
 ---
 

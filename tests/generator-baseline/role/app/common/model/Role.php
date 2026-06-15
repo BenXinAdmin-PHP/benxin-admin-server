@@ -20,7 +20,7 @@ class Role extends BxModel
 {
     protected $name = 'role';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'         => 'integer',

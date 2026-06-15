@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-06-15 (M3-G-sweep: $hidden 并入 tenant_id，最小暴露)
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -29,7 +30,7 @@ class Admin extends BxModel
     protected $name = 'admin';
 
     // 输出隐藏字段（密码绝不外泄；软删字段无需下发）
-    protected $hidden = ['password', 'deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id', 'password'];
 
     // 字段类型转换
     protected $type = [

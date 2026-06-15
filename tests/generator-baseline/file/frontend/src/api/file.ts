@@ -12,7 +12,6 @@ import { request, type ApiEnvelope, type PageResult } from '@/utils/request'
 /** 文件行（列表/详情共用） */
 export interface FileItem {
   id: number
-  tenant_id: number
   create_by: number
   create_dept: number
   original_name: string

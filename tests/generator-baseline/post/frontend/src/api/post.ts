@@ -12,7 +12,6 @@ import { request, type ApiEnvelope, type PageResult } from '@/utils/request'
 /** 岗位行（列表/详情共用） */
 export interface PostItem {
   id: number
-  tenant_id: number
   code: string
   name: string
   sort: number
