@@ -32,7 +32,7 @@
 ## ✨ 核心特性
 
 ### 🏗️ 代码生成器护城河
-一条 `php think bx:make` 从**表结构**直出**全栈产物**：后端四件套（Model / Controller / Service / Validate）+ 路由 + 菜单权限 seeder + 前端列表页 / 编辑表单 / 分配弹窗 / API 薄壳。覆盖**四种范式**——纯 CRUD、树形（递归 CTE 或内存建树）、授权链路（角色分配菜单 + Casbin 同步 + 事务回滚）、数据权限。**「生成 == 手写黄金样板」逐字保真**，回归基线随仓可复现：`bash tests/generator-baseline/verify.sh`。
+一条 `php think bx:make` 从**表结构**直出**全栈产物**：后端四件套（Model / Controller / Service / Validate）+ 路由 + 菜单权限 seeder + 前端列表页 / 编辑表单 / 分配弹窗 / API 薄壳。覆盖**三类范式**——纯 CRUD、树形（递归 CTE 或内存建树）、授权链路（角色分配菜单 + Casbin 同步 + 事务回滚）；数据权限（五档）作为横切能力贯穿其中（任何模块按需挂 `applyDataScope`，非独立复刻范式）。**「生成 == 手写黄金样板」逐字保真**，回归基线随仓可复现：`bash tests/generator-baseline/verify.sh`。
 
 <img src="docs/screenshots/generator-make.png" alt="php think bx:make 从表结构直出后端四件套 + 路由 + seeder + 前端全栈产物" width="760" />
 
