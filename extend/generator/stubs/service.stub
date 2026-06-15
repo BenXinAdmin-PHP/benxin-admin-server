@@ -1,0 +1,73 @@
+<?php
+// +----------------------------------------------------------------------
+// | @project   BenXinAdmin
+// | @mission   {{ serviceMission }}
+// | @author    仗键天涯(daxing)
+// | @email     3442535897@qq.com
+// | @date      {{ date }}
+// +----------------------------------------------------------------------
+
+declare(strict_types=1);
+
+namespace app\admin\service;
+
+use app\common\base\BxService;
+use app\common\exception\BusinessException;
+{{ libraryImports }}{{ modelImports }}{{ serviceImports }}{{ dbImport }}
+/**
+ * {{ serviceSummary }}
+{{ uniqueDoc }} */
+class {{ ModuleName }}Service extends BxService
+{
+    protected const FILLABLE = [{{ fillable }}];
+
+{{ collectionMethods }}
+
+    public function detail(int $id): {{ ModuleName }}
+    {
+        return {{ ModuleName }}::findOrFail($id);
+    }
+{{ relationIdMethods }}
+    /**
+     * @param array<string,mixed> $data
+     */
+    public function create(array $data): {{ ModuleName }}
+    {
+        $data = $this->fillable($data);
+{{ purifyCreate }}{{ createParentGuard }}{{ uniqueGuardCreate }}        $data['tenant_id'] = {{ ModuleName }}::currentTenantId();
+
+        return {{ ModuleName }}::create($data);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    public function update(int $id, array $data): {{ ModuleName }}
+    {
+        ${{ moduleName }} = {{ ModuleName }}::findOrFail($id);
+        $data = $this->fillable($data);
+{{ purifyUpdate }}{{ updateGuards }}
+        ${{ moduleName }}->save($data);
+
+        return ${{ moduleName }};
+    }
+
+    /**
+     * {{ deleteDoc }}
+     */
+    public function delete(int $id): void
+    {
+        ${{ moduleName }} = {{ ModuleName }}::findOrFail($id);
+{{ deleteGuard }}{{ deleteAction }}    }
+{{ statusMethod }}{{ relationAssignMethods }}{{ publicTreeExtras }}
+    // ------------------------------------------------------------------
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    protected function fillable(array $data): array
+    {
+        return array_intersect_key($data, array_flip(self::FILLABLE));
+    }
+{{ purifyMethods }}{{ treeHelperMethods }}{{ uniqueGuardMethod }}}

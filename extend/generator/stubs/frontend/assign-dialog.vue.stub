@@ -1,0 +1,80 @@
+<!--
+  +----------------------------------------------------------------------
+  | @project   BenXinAdmin
+  | @mission   {{ dialogMission }}
+  | @author    仗键天涯(daxing)
+  | @email     3442535897@qq.com
+  | @date      {{ dateDay }}
+  +----------------------------------------------------------------------
+-->
+<script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
+import { ElMessage, type ElTree } from 'element-plus'
+import { {{ targetTreeFn }}, type {{ targetItemType }} } from '@/api/{{ targetApiModule }}'
+import { {{ relationFnImports }} } from '@/api/{{ moduleName }}'
+
+const props = defineProps<{ {{ moduleName }}Id: number; {{ moduleName }}Name: string }>()
+
+const visible = defineModel<boolean>({ required: true })
+
+const emit = defineEmits<{
+  {{ successDoc }}
+  success: []
+}>()
+
+const treeRef = ref<InstanceType<typeof ElTree>>()
+const {{ targetTreeVar }} = ref<{{ targetItemType }}[]>([])
+const loading = ref(false)
+const saving = ref(false)
+
+{{ watchDoc }}
+watch(visible, async (val) => {
+  if (!val) {
+    return
+  }
+  loading.value = true
+  try {
+    const [treeResp, idsResp] = await Promise.all([{{ targetTreeFn }}(), {{ readFn }}(props.{{ moduleName }}Id)])
+    {{ targetTreeVar }}.value = treeResp.data
+    await nextTick()
+    treeRef.value?.setCheckedKeys(idsResp.data)
+  } finally {
+    loading.value = false
+  }
+})
+
+async function submit() {
+  const keys = (treeRef.value?.getCheckedKeys() ?? []) as number[]
+  saving.value = true
+  try {
+    await {{ writeFn }}(props.{{ moduleName }}Id, keys)
+    ElMessage.success('分配成功')
+    visible.value = false
+    emit('success')
+  } catch {
+    {{ catchComment }}
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <el-dialog v-model="visible" :title="`分配{{ relationCn }} —— ${{{ moduleName }}Name}`" width="520px">
+    <div v-loading="loading" class="max-h-60vh overflow-y-auto">
+      <el-tree
+        ref="treeRef"
+        :data="{{ targetTreeVar }}"
+        :props="{ label: '{{ treeLabel }}', children: 'children' }"
+        node-key="id"
+        show-checkbox
+        check-strictly
+        default-expand-all
+      />
+    </div>
+    <template #footer>
+      <el-button @click="visible = false">取消</el-button>
+      <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
+    </template>
+  </el-dialog>
+</template>

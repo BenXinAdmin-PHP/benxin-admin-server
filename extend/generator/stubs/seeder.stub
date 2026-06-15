@@ -1,0 +1,46 @@
+<?php
+// +----------------------------------------------------------------------
+// | @project   BenXinAdmin
+// | @mission   种子 — {{ moduleCn }}菜单与权限（生成器产出，幂等）
+// | @author    仗键天涯(daxing)
+// | @email     3442535897@qq.com
+// | @date      {{ date }}
+// +----------------------------------------------------------------------
+
+use think\facade\Db;
+use think\migration\Seeder;
+
+/**
+ * {{ moduleCn }}菜单 + {{ permPrefix }}:{{ seederPermActs }} 权限（幂等）。
+ * 落地方式：复制本文件到 database/seeds/ 后 `php think seed:run -s {{ ModuleName }}MenuSeeder`，
+ * 或并入既有种子流程；{{ seederDirDoc }}
+ */
+class {{ ModuleName }}MenuSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $now   = date('Y-m-d H:i:s');
+{{ seederDirBlock }}
+        $menuId = (int) Db::name('menu')->where(['tenant_id' => 0, 'name' => '{{ seederMenuName }}'])->whereNull('deleted_at')->value('id');
+        if ($menuId === 0) {
+            $menuId = (int) Db::name('menu')->insertGetId([
+                'tenant_id' => 0, 'parent_id' => $dirId, 'type' => 2, 'name' => '{{ seederMenuName }}', 'title' => '{{ moduleCn }}',
+                'path' => '{{ seederMenuPath }}', 'component' => '{{ seederMenuComponent }}', 'perms' => '', 'icon' => '{{ seederMenuIcon }}',
+                'sort' => {{ seederMenuSort }}, 'status' => 1, 'visible' => 1, 'created_at' => $now, 'updated_at' => $now,
+            ]);
+        }
+
+        foreach ([{{ seederPermItems }}] as [$act, $title, $sort]) {
+            $perms = '{{ permPrefix }}:' . $act;
+            if (Db::name('menu')->where(['tenant_id' => 0, 'perms' => $perms])->whereNull('deleted_at')->find() === null) {
+                Db::name('menu')->insert([
+                    'tenant_id' => 0, 'parent_id' => $menuId, 'type' => 3, 'name' => '', 'title' => $title,
+                    'path' => '', 'component' => '', 'perms' => $perms, 'icon' => '', 'sort' => $sort,
+                    'status' => 1, 'visible' => 1, 'created_at' => $now, 'updated_at' => $now,
+                ]);
+            }
+        }
+
+        echo "[{{ ModuleName }}MenuSeeder] 完成。\n";
+    }
+}

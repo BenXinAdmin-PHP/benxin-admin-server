@@ -1,0 +1,52 @@
+{
+    "name": "benxin/benxin-admin-server",
+    "description": "BenXinAdmin · 本心通用管理后台底座（后端，ThinkPHP 8 多应用）",
+    "type": "project",
+    "keywords": [
+        "BenXinAdmin",
+        "thinkphp",
+        "admin",
+        "rbac"
+    ],
+    "homepage": "https://gitee.com/binxin-admin/binxin-admin-server",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "仗键天涯(daxing)",
+            "email": "3442535897@qq.com"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "casbin/casbin": "^0.2.1",
+        "ezyang/htmlpurifier": "^4.19",
+        "hyperf/pimple": "^2.0",
+        "lcobucci/jwt": "^5.6",
+        "topthink/framework": "^8.1",
+        "topthink/think-filesystem": "^2.0|^3.0",
+        "topthink/think-migration": "^3.0",
+        "topthink/think-multi-app": "^1.0",
+        "topthink/think-orm": "^3.0|^4.0",
+        "topthink/think-throttle": "^2.0",
+        "yansongda/pay": "^3.7.20"
+    },
+    "autoload": {
+        "psr-4": {
+            "app\\": "app"
+        },
+        "psr-0": {
+            "": "extend/"
+        }
+    },
+    "config": {
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "@php think service:discover",
+            "@php think vendor:publish"
+        ]
+    }
+}

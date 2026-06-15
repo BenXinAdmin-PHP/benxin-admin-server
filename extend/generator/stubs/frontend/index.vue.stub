@@ -1,0 +1,60 @@
+<!--
+  +----------------------------------------------------------------------
+  | @project   BenXinAdmin
+  | @mission   {{ pageMission }}
+  | @author    仗键天涯(daxing)
+  | @email     3442535897@qq.com
+  | @date      {{ dateDay }}
+  +----------------------------------------------------------------------
+-->
+<script setup lang="ts">
+import { ref } from 'vue'
+import XTable from '@/components/XTable/index.vue'
+import XFormDrawer from '@/components/XFormDrawer/index.vue'
+{{ componentImports }}{{ assignDialogImport }}import {
+{{ apiImports }}
+} from '@/api/{{ moduleName }}'
+import type { {{ tableTypeImports }} } from '@/components/XTable/types'
+import type { XFormDrawerConfig } from '@/components/XFormDrawer/types'
+{{ constsBlock }}
+{{ apiSlotComment }}const api = {
+{{ apiSlots }}
+}
+
+const config: XTableConfig = {
+  api,
+  rowKey: 'id',
+{{ treeFlags }}{{ searchBlock }}  columns: [
+{{ columns }}
+  ],
+  toolbar: { create: { perm: '{{ permPrefix }}:create', label: '新增{{ moduleCn }}' } },
+{{ actionsWidth }}  rowActions: [
+{{ rowActions }}
+  ],
+}
+{{ helperBlocks }}
+const formConfig: XFormDrawerConfig = {
+  entity: '{{ entity }}',
+{{ formWidth }}  api,
+{{ detailLine }}  items: [
+{{ formItems }}
+  ],
+}
+
+const tableRef = ref<InstanceType<typeof XTable>>()
+const drawerRef = ref<InstanceType<typeof XFormDrawer>>()
+{{ assignState }}
+function onAction(name: string, row: Row | null) {
+  if (name === 'create') {
+    drawerRef.value?.open('create')
+{{ onActionBranches }}  }
+}
+</script>
+
+<template>
+  <el-card shadow="never">
+    <XTable ref="tableRef" :config="config" @action="onAction"{{ tableTagEnd }}
+  </el-card>
+
+  <XFormDrawer ref="drawerRef" :config="formConfig" @success="tableRef?.reload()"{{ drawerTagEnd }}
+{{ assignDialogTag }}</template>

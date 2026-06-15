@@ -1,0 +1,36 @@
+<?php
+// +----------------------------------------------------------------------
+// | @project   BenXinAdmin
+// | @mission   校验器 — {{ moduleCn }}（create/update{{ statusSceneHint }}{{ assignSceneHint }} 场景）
+// | @author    仗键天涯(daxing)
+// | @email     3442535897@qq.com
+// | @date      {{ date }}
+// +----------------------------------------------------------------------
+
+declare(strict_types=1);
+
+namespace app\admin\validate;
+
+use app\common\base\BxValidate;
+
+/**
+ * {{ moduleCn }}入参校验。{{ uniqueValidateDoc }}
+ */
+class {{ ModuleName }}Validate extends BxValidate
+{
+    protected $rule = [
+{{ rules }}
+    ];
+
+{{ messageBlock }}
+
+    public function sceneCreate(): static
+    {
+        return $this->only([{{ sceneFields }}]);
+    }
+
+    public function sceneUpdate(): static
+    {
+        return $this->only([{{ sceneFields }}]){{ updateRemove }};
+    }
+{{ statusScene }}{{ assignScenes }}}

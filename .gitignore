@@ -6,7 +6,13 @@
 !.env.example
 /public/storage
 /public/uploads
+# 本地文件存储驱动落地目录（非 Web 可执行目录，上传文件不入库）
+/storage/
 .idea/
 .vscode/
 .DS_Store
 composer.phar
+# Claude Code / agent 本地状态
+/.claude/
+# 生成器默认落位产物（路由/种子片段 + 前端产物），验收 diff 用，不入库
+/extend/generator/output/
