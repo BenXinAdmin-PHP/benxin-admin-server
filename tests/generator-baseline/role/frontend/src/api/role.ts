@@ -12,7 +12,6 @@ import { request, type ApiEnvelope, type PageResult } from '@/utils/request'
 /** 角色行（列表/详情共用；详情额外带 menu_ids） */
 export interface RoleItem {
   id: number
-  tenant_id: number
   name: string
   code: string
   sort: number

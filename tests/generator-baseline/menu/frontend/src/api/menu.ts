@@ -12,7 +12,6 @@ import { request, type ApiEnvelope } from '@/utils/request'
 /** 菜单树节点（管理端全字段；children 仅在有子节点时存在） */
 export interface MenuItem {
   id: number
-  tenant_id: number
   parent_id: number
   /** 类型：1目录 2菜单 3按钮 */
   type: number

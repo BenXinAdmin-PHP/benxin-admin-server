@@ -12,7 +12,6 @@ import { request, type ApiEnvelope, type PageResult } from '@/utils/request'
 /** 管理员行（列表/详情共用） */
 export interface AdminItem {
   id: number
-  tenant_id: number
   username: string
   password: string
   nickname: string
