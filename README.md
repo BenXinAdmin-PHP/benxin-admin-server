@@ -161,6 +161,19 @@ curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
 > 2. **生产务必 `APP_DEBUG=false`**（`.env.example` 已默认 false）——调试探针与测试种子均靠它守门，生产不暴露。
 > 3. 三方密钥（支付 / 短信 / OSS）**AES 加密入库、不进仓库**；`.env` 已在 `.gitignore`，**严禁提交真实密钥**。
 
+### 📦 大文件上传配置（素材模块必看）
+
+素材模块的**本地 / 七牛 / 阿里 OSS 上传走服务端中转**，受 PHP 上传限额约束。PHP 默认 `post_max_size=8M` / `upload_max_filesize=2M` 偏小，上传中大文件（视频、大图）会**在进入应用前被 PHP 拒绝**。如需服务端中转上传中大文件，请调大 `php.ini`（值 ≥ 素材 app 层上限 100MB）：
+
+```ini
+post_max_size = 100M
+upload_max_filesize = 100M
+```
+
+改后重启 PHP / `php think run`。前端（benxin-admin-web）有上传前大小预判常量 `RESOURCE_MAX_UPLOAD_MB`（默认 8，对齐 PHP 保守默认），**调大 php.ini 后请同步调大该前端常量**，否则前端会按旧上限提前拦截。
+
+> 💡 **大视频推荐开通 VOD 客户端直传**（腾讯云 VOD，后台「参数配置 → storage」开通）：文件由浏览器经官方 SDK **直传腾讯云、不经 PHP / 服务端中转**，无此限额问题；服务端中转上传（local/OSS/七牛）始终受 php.ini 约束。
+
 ### 首次登录后台
 
 1. 部署前 `.env` 必设 `SUPER_ADMIN_INIT_PWD=<强密码>`——**不设则不创建超管账号、无法登录**（防默认弱口令的设计）。
