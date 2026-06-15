@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-15 15:08:44
-// | @updated   2026-06-15 15:06:31
+// | @updated   2026-06-15 18:30:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -18,7 +18,9 @@ use app\common\library\ErrorCode;
 use app\common\library\storage\LocalStorage;
 use app\common\library\storage\StorageManager;
 use app\common\library\Uuid;
+use app\common\library\vod\VodException;
 use app\common\model\Resource;
+use app\common\service\BxVod;
 use think\facade\Db;
 use think\facade\Log;
 use think\file\UploadedFile;
@@ -138,10 +140,10 @@ class ResourceService extends BxService
         $total = $query->count();
         $list  = $query->page($page, $pageSize)->select()->toArray();
 
-        // 取数适配（M-素材-B）：url 实时解析——local→raw 代理路由；云→实时签名 URL
-        // （不用落库的过期值，签名 URL 实时签发不缓存，§4/§7）
+        // 取数适配（M-素材-B/C）：url 实时解析——local→raw 代理路由；云→实时签名 URL；
+        // VOD→落库播放 URL 直接起步（不签 PlayAuth，§7）。（签名 URL 实时签发不缓存，§4/§7）
         foreach ($list as &$row) {
-            $row['url'] = $this->resolveUrl((string) $row['storage'], (int) $row['id'], (string) $row['path']);
+            $row['url'] = $this->resolveUrl((string) $row['storage'], (int) $row['id'], (string) $row['path'], (string) $row['url']);
         }
         unset($row);
 
@@ -151,7 +153,7 @@ class ResourceService extends BxService
     public function detail(int $id): Resource
     {
         $record      = Resource::findOrFail($id);
-        $record->url = $this->resolveUrl((string) $record->storage, (int) $record->id, (string) $record->path);
+        $record->url = $this->resolveUrl((string) $record->storage, (int) $record->id, (string) $record->path, (string) $record->url);
 
         return $record;
     }
@@ -181,12 +183,52 @@ class ResourceService extends BxService
     }
 
     /**
-     * 删除（纯 CRUD 软删；关联护栏按需在 config 声明）。
+     * 删除（软删记录 + 同步物理删，容错；与 batchDelete 同口径，支持 local/云/VOD）。
      */
     public function delete(int $id): void
     {
         $resource = Resource::findOrFail($id);
+        // 软删前快照（TP delete() 后模型属性清空）
+        $snap = [
+            'storage'      => (string) $resource->storage,
+            'path'         => (string) $resource->path,
+            'vod_media_id' => (string) $resource->vod_media_id,
+        ];
         $resource->delete();
+
+        try {
+            $this->physicalDelete($snap['storage'], $snap['path'], $snap['vod_media_id']);
+        } catch (\Throwable $e) {
+            Log::error('[ResourceService] 物理删除失败 id=' . $id . '：' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 按 storage 物理删除（容错由调用方包 try/catch，ADR-18 仅 Log 不回滚主流程）：
+     *  - local      → LocalStorage::delete(path)
+     *  - vod_tx     → DeleteMedia(vod_media_id)（VodTxStorage 适配）
+     *  - oss/qiniu  → 对应驱动 delete(path)（删云端对象）
+     */
+    protected function physicalDelete(string $storage, string $path, string $vodMediaId): void
+    {
+        if ($storage === 'local') {
+            if ($path !== '') {
+                (new LocalStorage())->delete($path);
+            }
+
+            return;
+        }
+        if ($storage === 'vod_tx') {
+            if ($vodMediaId !== '') {
+                StorageManager::makeByName('vod_tx')->delete($vodMediaId);
+            }
+
+            return;
+        }
+        // oss / qiniu：按 storage 取对应驱动删云端对象
+        if ($path !== '') {
+            StorageManager::makeByName($storage)->delete($path);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -245,7 +287,11 @@ class ResourceService extends BxService
         //    配置不全自动回退 local，driverNameForMediaType 与 forMediaType 解析一致）。
         //    ★云 put 失败不落库（不留半条记录）；本地临时文件由框架请求末自动清理。
         $storageName = StorageManager::driverNameForMediaType($mediaType);
-        $storage     = StorageManager::forMediaType($mediaType);
+        // ★VOD 不走服务端中转上传（视频大，PHP 限额扛不住）：音视频配置为 VOD 时引导走直传端点（§5）。
+        if (in_array($storageName, ['vod_tx', 'vod_ali'], true)) {
+            throw new BusinessException('音视频已配置 VOD 点播，请使用直传：先 POST /admin/v1/resources/vod/upload-sign 取凭证直传腾讯 VOD，再 POST /admin/v1/resources/vod/confirm 回填');
+        }
+        $storage = StorageManager::forMediaType($mediaType);
         try {
             $storedPath = $storage->put($file->getRealPath(), $saveName);
         } catch (\Throwable $e) {
@@ -292,6 +338,104 @@ class ResourceService extends BxService
         ];
     }
 
+    // ==================== 手工槽：VOD 客户端直传（M-素材-C，ADR-19） ====================
+
+    /**
+     * 签发 VOD 客户端直传上传凭证（§5）。
+     * 校验：media_type 必须 video/audio 且对应 storage_driver_* 解析为 vod_tx（已开通+配置完整），
+     *       否则 422（未开通，driverNameForMediaType 已含「配置不全回退 local」防线，守 §1）。
+     *
+     * @param array<string,mixed> $opts media_type / file_name / expire
+     * @return array<string,mixed>
+     */
+    public function vodUploadSign(array $opts): array
+    {
+        $mediaType = (string) ($opts['media_type'] ?? 'video');
+        if (!in_array($mediaType, ['video', 'audio'], true)) {
+            throw new BusinessException('VOD 直传仅支持 video / audio');
+        }
+        // 必须已开通 VOD（选了 vod_tx 且配置完整才解析为 vod_tx；否则回退 local → 此处拒签）
+        if (StorageManager::driverNameForMediaType($mediaType) !== 'vod_tx') {
+            throw VodException::notReady('当前「' . $mediaType . '」未开通 VOD（需在后台将 storage_driver_' . $mediaType . ' 设为 vod_tx 并完善腾讯云 VOD 配置）');
+        }
+
+        return (new BxVod($this->app))->signUpload($opts);
+    }
+
+    /**
+     * 直传完成回填落库（§5）：前端直传腾讯 VOD 成功后，回填 file_id(=vod_media_id) + 播放 url 等。
+     * 落库 storage=vod_tx；配了 procedure→transcode_status=1（待转码，等回调迁移 2/3/4），否则 0（无需转码）。
+     *
+     * ★不可信前端字段校验程度（report 说明）：file_id 非空 + media_type 白名单 + 按 vod_media_id 防重复登记；
+     *   最低限度落库 + 标记待回调确认（transcode_status 反映待转码态）。
+     *   更强核验（调 VOD DescribeMedia 确认 fileId 真属本 sub_app）留 daxing 真实凭证扩展（同 M4-C 真实商户待验）。
+     *
+     * @param array<string,mixed> $data file_id / media_type / name / url / category_id / size
+     * @return array<string,mixed>
+     */
+    public function vodConfirm(array $data): array
+    {
+        $fileId = trim((string) ($data['file_id'] ?? ''));
+        if ($fileId === '') {
+            throw new BusinessException('缺少 file_id（VOD 直传返回的媒资 ID）');
+        }
+        $mediaType = (string) ($data['media_type'] ?? 'video');
+        if (!in_array($mediaType, ['video', 'audio'], true)) {
+            throw new BusinessException('media_type 仅支持 video / audio');
+        }
+
+        // 防重复登记（幂等友好）：同 vod_media_id 已存在直接返回既有记录
+        $exist = Resource::where('storage', 'vod_tx')->where('vod_media_id', $fileId)->find();
+        if ($exist !== null) {
+            return $this->vodConfirmResult($exist);
+        }
+
+        // 校验 VOD 已开通（不可信前端不能伪造开通态）
+        if (StorageManager::driverNameForMediaType($mediaType) !== 'vod_tx') {
+            throw VodException::notReady();
+        }
+
+        $procedure = trim((string) (new ConfigService(app()))->get('vod_tx_procedure', ''));
+        $name      = mb_substr((string) ($data['name'] ?? $fileId), 0, 255);
+
+        $record = Resource::create([
+            'tenant_id'    => Resource::currentTenantId(),
+            'category_id'  => max(0, (int) ($data['category_id'] ?? 0)),
+            'name'         => $name,
+            'media_type'   => $mediaType,
+            'storage'      => 'vod_tx',
+            'path'         => $fileId, // 以 fileId 作存储 key（删媒资 DeleteMedia 用，与 vod_media_id 同值）
+            'url'          => mb_substr((string) ($data['url'] ?? ''), 0, 500),
+            'file_name'    => '',
+            'original_name' => $name,
+            'ext'          => '',
+            'mime'         => '',
+            'size'         => max(0, (int) ($data['size'] ?? 0)),
+            'hash'         => '',
+            'vod_media_id' => $fileId,
+            // 配了 procedure → 1 待转码（等回调迁移）；否则 0 无需转码（直接可播）
+            'transcode_status' => $procedure !== '' ? 1 : 0,
+        ]);
+
+        return $this->vodConfirmResult($record);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function vodConfirmResult(Resource $record): array
+    {
+        return [
+            'id'               => (int) $record->id,
+            'name'             => $record->name,
+            'media_type'       => (string) $record->media_type,
+            'storage'          => 'vod_tx',
+            'vod_media_id'     => (string) $record->vod_media_id,
+            'url'              => (string) $record->url,
+            'transcode_status' => (int) $record->transcode_status,
+        ];
+    }
+
     /**
      * 受控取流目标（M-素材-B 适配，按 storage 分流）：
      *  - local      → 返回文件内容流（inline 输出，本地音视频播放靠它）
@@ -316,6 +460,16 @@ class ResourceService extends BxService
                 'mime'    => (string) $record->mime,
                 'name'    => (string) $record->original_name,
             ];
+        }
+
+        // VOD：后端不代理大流量，302 到落库播放 URL（v1 不签 PlayAuth）；缺地址多为转码未完成
+        if ($storage === 'vod_tx') {
+            $playUrl = (string) $record->url;
+            if ($playUrl === '') {
+                throw new BusinessException('VOD 播放地址缺失（可能转码尚未完成）');
+            }
+
+            return ['type' => 'redirect', 'url' => $playUrl];
         }
 
         // 云：302 到实时签名 URL（签发失败直接报错，不回退避免重定向环）
@@ -349,13 +503,14 @@ class ResourceService extends BxService
             throw new BusinessException('未找到可删除的素材');
         }
 
-        // 先快照物理信息：ThinkPHP delete() 后模型内存属性被清空，故必须在软删前取 storage/path
+        // 先快照物理信息：ThinkPHP delete() 后模型内存属性被清空，故必须在软删前取 storage/path/vod_media_id
         $physical = [];
         foreach ($records as $r) {
             $physical[] = [
-                'id'      => (int) $r->id,
-                'storage' => (string) $r->storage,
-                'path'    => (string) $r->path,
+                'id'           => (int) $r->id,
+                'storage'      => (string) $r->storage,
+                'path'         => (string) $r->path,
+                'vod_media_id' => (string) $r->vod_media_id,
             ];
         }
 
@@ -366,13 +521,12 @@ class ResourceService extends BxService
             }
         });
 
-        // 物理删（容错：失败仅记日志，不回滚记录删除；残留待后续 GC）
+        // 物理删（容错：失败仅记日志，不回滚记录删除；残留待后续 GC）；
+        // 混合 local/云(oss/qiniu)/VOD 按各自 storage 分别走对应 delete（§8）。
         $physicalFailed = [];
         foreach ($physical as $p) {
             try {
-                if ($p['storage'] === 'local' && $p['path'] !== '') {
-                    (new LocalStorage())->delete($p['path']);
-                }
+                $this->physicalDelete($p['storage'], $p['path'], $p['vod_media_id']);
             } catch (\Throwable $e) {
                 $physicalFailed[] = $p['id'];
                 Log::error('[ResourceService] 物理删除失败 id=' . $p['id'] . '：' . $e->getMessage());
@@ -428,12 +582,16 @@ class ResourceService extends BxService
     }
 
     /**
-     * 解析素材访问 URL（取数路径用，M-素材-B）：
+     * 解析素材访问 URL（取数路径用，M-素材-B/C）：
+     *  - vod_tx     → 落库播放 URL 直接起步（v1 不签 PlayAuth；★PlayAuth 防盗链扩展位见 BxVod，ADR-19 本步不实现）
      *  - local      → 后端 raw 代理路由
      *  - oss/qiniu  → 实时签名 URL；签名失败回退 raw 路由（raw 再做 302 托底，不让单条坏数据拖垮列表）
      */
-    protected function resolveUrl(string $storage, int $id, string $path): string
+    protected function resolveUrl(string $storage, int $id, string $path, string $storedUrl = ''): string
     {
+        if ($storage === 'vod_tx') {
+            return $storedUrl; // ★PlayAuth 扩展位：上层接 VOD 高级防盗链时在此/BxVod 据此签发，v1 透传播放 URL
+        }
         if ($storage === 'oss' || $storage === 'qiniu') {
             $signed = $this->signCloudUrl($storage, $path);
             if ($signed !== '') {

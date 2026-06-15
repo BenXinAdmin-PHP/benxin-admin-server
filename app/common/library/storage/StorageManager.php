@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 22:00:00
-// | @updated   2026-06-15 16:00:00
+// | @updated   2026-06-15 18:30:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace app\common\library\storage;
 
 use app\admin\service\ConfigService;
+use app\common\library\vod\VodManager;
 use RuntimeException;
 use think\facade\Log;
 
@@ -78,7 +79,8 @@ class StorageManager
      *
      * - image            → storage_driver_image（local|qiniu）
      * - document/archive → storage_driver_document / storage_driver_archive（local|oss）
-     * - video/audio/未知  → 恒 local（B 步不上云；VOD 留 M-素材-C）
+     * - video/audio      → storage_driver_video / storage_driver_audio（local|vod_tx；M-素材-C VOD 接入）
+     * - 未知             → 恒 local 兜底
      * ★未开通回退：选了云 driver 但对应必填配置为空 → 回退 local + Log::warning（守 §1，配置不全不挂）。
      */
     public static function driverNameForMediaType(string $mediaType): string
@@ -87,7 +89,9 @@ class StorageManager
             'image'    => 'storage_driver_image',
             'document' => 'storage_driver_document',
             'archive'  => 'storage_driver_archive',
-            default    => null, // video/audio/未知 → local
+            'video'    => 'storage_driver_video',
+            'audio'    => 'storage_driver_audio',
+            default    => null, // 未知 → local
         };
         if ($key === null) {
             return 'local';
@@ -134,6 +138,10 @@ class StorageManager
                 'domain'     => (string) $config->get('qiniu_domain', ''),
                 'url_expire' => (int) $config->get('qiniu_url_expire', 3600),
             ]),
+            // 腾讯云 VOD（M-素材-C）：客户端直传 + 凭证签发型驱动，套 VodTxStorage 适配（put throw / url 播放 / delete 删媒资）
+            'vod_tx' => new VodTxStorage(VodManager::driver('vod_tx')),
+            // 阿里云 VOD 扩展位（留后续/上层，不写实现，守 §1）：
+            'vod_ali' => throw new RuntimeException('阿里云 VOD 驱动尚未实现（留扩展位，TODO 上层/后续按需落地）'),
             // 腾讯 COS 扩展位（留 M-素材-C+，不写实现）
             'cos'   => throw new RuntimeException('腾讯 COS 驱动尚未实现（留 M-素材-C+ 扩展位）'),
             default => new LocalStorage(),
@@ -154,6 +162,10 @@ class StorageManager
                 && (string) $config->get('qiniu_secret_key', '') !== ''
                 && (string) $config->get('qiniu_bucket', '') !== ''
                 && (string) $config->get('qiniu_domain', '') !== '',
+            // 腾讯 VOD（M-素材-C）：secret_id/secret_key/sub_app_id 必填齐全才视「已开通」
+            'vod_tx' => (string) $config->get('vod_tx_secret_id', '') !== ''
+                && (string) $config->get('vod_tx_secret_key', '') !== ''
+                && (int) $config->get('vod_tx_sub_app_id', 0) > 0,
             default => false, // 未知云驱动一律视为未就绪 → 回退 local
         };
     }

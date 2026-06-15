@@ -1,11 +1,11 @@
 <?php
 // +----------------------------------------------------------------------
 // | @project   BenXinAdmin
-// | @mission   素材 — GET|POST|PUT|DELETE /admin/v1/resources[/:id|/upload|/batch|/:id/raw]
+// | @mission   素材 — GET|POST|PUT|DELETE /admin/v1/resources[/:id|/upload|/batch|/:id/raw|/vod/upload-sign|/vod/confirm]
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-15 15:08:44
-// | @updated   2026-06-15 15:06:31
+// | @updated   2026-06-15 18:30:00
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -22,6 +22,7 @@ use think\Response;
  * 【生成器产出】index / read / save / update / delete（纯 CRUD 复刻 post 母版）。
  * 【手工槽（M-素材-A）】upload（本地全类型上传）/ raw（受控取流，本地音视频播放）/
  *   batchDelete（批量删，事务软删 + 物理删容错）。
+ * 【手工槽（M-素材-C）】vodUploadSign（签发 VOD 直传凭证）/ vodConfirm（直传完成回填落库）。
  */
 class Resource extends BxController
 {
@@ -37,6 +38,39 @@ class Resource extends BxController
         );
 
         return $this->success($data, '上传成功');
+    }
+
+    /**
+     * 签发 VOD 客户端直传上传凭证（M-素材-C，§5）。
+     * POST /admin/v1/resources/vod/upload-sign （body: media_type=video|audio, file_name?, expire?）
+     */
+    public function vodUploadSign(): Response
+    {
+        $data = (new ResourceService($this->app))->vodUploadSign([
+            'media_type' => (string) $this->request->param('media_type', 'video'),
+            'file_name'  => (string) $this->request->param('file_name', ''),
+            'expire'     => (int) $this->request->param('expire', 600),
+        ]);
+
+        return $this->success($data, '凭证签发成功');
+    }
+
+    /**
+     * VOD 直传完成回填落库（M-素材-C，§5）。
+     * POST /admin/v1/resources/vod/confirm （body: file_id, media_type, name?, url?, category_id?, size?）
+     */
+    public function vodConfirm(): Response
+    {
+        $data = (new ResourceService($this->app))->vodConfirm([
+            'file_id'     => (string) $this->request->param('file_id', ''),
+            'media_type'  => (string) $this->request->param('media_type', 'video'),
+            'name'        => (string) $this->request->param('name', ''),
+            'url'         => (string) $this->request->param('url', ''),
+            'category_id' => (int) $this->request->param('category_id', 0),
+            'size'        => (int) $this->request->param('size', 0),
+        ]);
+
+        return $this->success($data, '回填成功');
     }
 
     /**
