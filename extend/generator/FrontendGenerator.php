@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-12 10:00:00
-// | @updated   2026-06-12 16:00:00
+// | @updated   2026-06-15 (M3-G-sweep: interface 同步隐藏 tenant_id，对齐后端 hidden)
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -113,7 +113,9 @@ class FrontendGenerator
 
         $out = $doc . "\nexport interface {$item} {\n";
         foreach ($this->meta->allColumns as $col) {
-            if ($col['name'] === 'deleted_at') {
+            // deleted_at / tenant_id 是框架内部维度字段，后端 Model $hidden 已隐藏（M3-G），
+            // 不下发故前端 interface 同步不声明，保持前后端契约一致（最小暴露）。
+            if ($col['name'] === 'deleted_at' || $col['name'] === 'tenant_id') {
                 continue;
             }
             $tsDoc = $this->tsDocFor($col['name']);
