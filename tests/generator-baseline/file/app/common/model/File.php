@@ -20,7 +20,7 @@ class File extends BxModel
 {
     protected $name = 'file';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'        => 'integer',

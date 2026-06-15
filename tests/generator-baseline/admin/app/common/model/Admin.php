@@ -20,7 +20,7 @@ class Admin extends BxModel
 {
     protected $name = 'admin';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'        => 'integer',

@@ -20,7 +20,7 @@ class Config extends BxModel
 {
     protected $name = 'config';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'           => 'integer',

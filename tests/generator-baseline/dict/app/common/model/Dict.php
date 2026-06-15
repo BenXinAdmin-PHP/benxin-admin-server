@@ -20,7 +20,7 @@ class Dict extends BxModel
 {
     protected $name = 'dict';
 
-    protected $hidden = ['deleted_at'];
+    protected $hidden = ['deleted_at', 'tenant_id'];
 
     protected $type = [
         'id'        => 'integer',
