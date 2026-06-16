@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-16 10:00:00
+// | @updated   2026-06-16（封面同步 PM 自绘素材 cover-*.png）
 // +----------------------------------------------------------------------
 
 use app\common\library\HtmlPurifier;
@@ -67,7 +68,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '入门',
                 'title' => '5 分钟跑通 BenXinAdmin 开发底座',
-                'cover' => '/static/demo/covers/c1.jpg',
+                'cover' => '/static/demo/covers/cover-quickstart.png',
                 'summary' => '从克隆仓库到登录后台，一条龙跑通 Docker 依赖、迁移与种子、本地裸装两种姿势，零门槛上手。',
                 'is_top' => 1,
                 'days'  => 12,
@@ -80,7 +81,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '入门',
                 'title' => '三种范式 + 数据权限：代码生成器护城河速览',
-                'cover' => '/static/demo/covers/c2.jpg',
+                'cover' => '/static/demo/covers/cover-codegen.png',
                 'summary' => 'bx:make 一条命令复刻纯 CRUD / 树形 / 授权链路三类范式，数据权限作为横切能力按需挂载。',
                 'is_top' => 0,
                 'days'  => 10,
@@ -93,7 +94,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '架构',
                 'title' => 'ThinkPHP8 多应用 + Vue3 + uni-app：一套底座三端通吃',
-                'cover' => '/static/demo/covers/c3.jpg',
+                'cover' => '/static/demo/covers/cover-multiend.png',
                 'summary' => '后端多应用分 admin/api，后台 Vue3 + Element Plus，C 端 uni-app 一码出小程序与 H5。',
                 'is_top' => 1,
                 'days'  => 8,
@@ -106,7 +107,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '架构',
                 'title' => '多路存储与 VOD：素材模块如何默认本地、按需上云',
-                'cover' => '/static/demo/covers/c4.jpg',
+                'cover' => '/static/demo/covers/cover-datascope.png',
                 'summary' => '按 media_type 路由本地 / 阿里 OSS / 七牛 / 腾讯 VOD，云能力默认关闭，纯本地零配置即可跑通。',
                 'is_top' => 0,
                 'days'  => 6,
@@ -119,7 +120,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '安全',
                 'title' => '八项安全基线：参数化 / 白名单 / AES / 限流如何落地',
-                'cover' => '/static/demo/covers/c5.jpg',
+                'cover' => '/static/demo/covers/cover-security.png',
                 'summary' => '每个模块的验收硬指标：ORM 参数化、字段白名单防批量赋值、三方密钥 AES 入库、敏感接口限流。',
                 'is_top' => 0,
                 'days'  => 4,
@@ -133,7 +134,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '安全',
                 'title' => '懒登录 + 双端登录流：C 端认证是怎么设计的',
-                'cover' => '/static/demo/covers/c6.jpg',
+                'cover' => '/static/demo/covers/cover-rbac.png',
                 'summary' => '浏览免登录、核心操作才拦截；小程序 code2session + 手机号，H5 公众号 oauth + 短信验证码。',
                 'is_top' => 0,
                 'days'  => 2,
