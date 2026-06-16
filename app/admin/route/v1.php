@@ -6,6 +6,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
 // | @updated   2026-06-15 18:30:00
+// | @updated   2026-06-16 —— 新增 configs/groups（去重分组+计数，供配置页顶栏 Tab）
 // +----------------------------------------------------------------------
 
 use app\admin\middleware\CasbinAuth;
@@ -95,7 +96,8 @@ Route::group('v1', function () {
         Route::get('dict-data', 'DictData/index')->middleware(CasbinAuth::class, 'system:dict:list');
         Route::post('dict-data', 'DictData/save')->middleware(CasbinAuth::class, 'system:dict:create');
 
-        // 参数配置（perm: system:config:*）；group/:group 取数须排在 /:id 之前
+        // 参数配置（perm: system:config:*）；groups/group/:group 等具体 action 须排在 /:id 之前
+        Route::get('configs/groups', 'Config/groups')->middleware(CasbinAuth::class, 'system:config:list');
         Route::get('configs/group/:group', 'Config/group')->middleware(CasbinAuth::class, 'system:config:list');
         Route::get('configs/:id', 'Config/read')->middleware(CasbinAuth::class, 'system:config:list')->pattern(['id' => '\d+']);
         Route::put('configs/:id', 'Config/update')->middleware(CasbinAuth::class, 'system:config:update')->pattern(['id' => '\d+']);

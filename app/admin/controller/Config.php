@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 14:00:00
+// | @updated   2026-06-16 —— 新增 groups()：去重分组+计数，供配置页顶栏 Tab 分类
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -34,6 +35,15 @@ class Config extends BxController
         ], $page, $size);
 
         return $this->paginate($result['list'], $result['total'], $page, $size);
+    }
+
+    /**
+     * 去重分组列表（含各组配置数）；供后台配置页顶栏 Tab 分类。
+     * GET /admin/v1/configs/groups
+     */
+    public function groups(): Response
+    {
+        return $this->success((new ConfigService($this->app))->groups());
     }
 
     /**
