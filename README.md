@@ -165,6 +165,22 @@ curl http://127.0.0.1:8801/admin/v1/ping     # -> {"code":0,"msg":"pong",...}
 
 素材模块（`bx_resource`）的本地落点、安全加固、大文件 `php.ini` 配置、云存储 / VOD 开通，统一见下方专章 **[素材存储部署指南](#-素材存储部署指南)**。
 
+### 🎬 C 端演示数据（可选，默认关闭）
+
+C 端（小程序 / H5）门面自带演示文章与分类，**默认不播种**，生产保持干净（守开源边界）：
+
+```bash
+# 1. .env 置开关（默认 false）
+DEMO_SEED_ENABLE = true
+
+# 2. 单独播种演示数据（3 个内容分类 + 6 篇讲 BenXinAdmin 自身的演示文章，幂等可重跑）
+php think seed:run -s DemoContentSeeder
+```
+
+- `DemoContentSeeder` **默认守门跳过**——即便 `php think seed:run` 全量跑也不会播种（开关为 `false` 时直接 echo 跳过），不污染全新库。
+- 演示文章封面写前端可解析路径 `/static/demo/covers/*.jpg`（素材随 [uni-app 仓](https://gitee.com/binxin-admin/binxin-admin-uniapp) 打包，后端不开放任何公开图片路由）。
+- 清理：删 `bx_content` 本批文章 + `bx_content_category` 三个演示分类即可（软删走 `deleted_at`）。
+
 ### 首次登录后台
 
 1. 部署前 `.env` 必设 `SUPER_ADMIN_INIT_PWD=<强密码>`——**不设则不创建超管账号、无法登录**（防默认弱口令的设计）。

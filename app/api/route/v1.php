@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-15 18:30:00
+// | @updated   2026-06-16（C 端演示升级：新增 content/categories 公开分类接口）
 // +----------------------------------------------------------------------
 
 use app\common\middleware\JwtAuth;
@@ -52,6 +52,8 @@ Route::group('v1', function () {
     Route::get('notices', 'Notice/index');
 
     // ---- 前台内容（M5-A A-2，只读已发布；列表无正文，详情浏览量+1）----
+    // 内容分类（C 端演示升级，启用态精简字段，供文章页筛选 chips；具体 action 置 contents/:id 前）
+    Route::get('content/categories', 'Content/categories');
     Route::get('contents/:id', 'Content/read')->pattern(['id' => '\d+']);
     Route::get('contents', 'Content/index');
 

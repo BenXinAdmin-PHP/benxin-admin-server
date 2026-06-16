@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-13 21:30:00
+// | @updated   2026-06-16 (C 端演示升级：新增 categories 公开分类接口供文章页筛选)
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -14,6 +15,7 @@ namespace app\api\controller;
 use app\common\base\BxController;
 use app\common\library\ErrorCode;
 use app\common\model\Content as ContentModel;
+use app\common\model\ContentCategory as ContentCategoryModel;
 use think\Response;
 
 /**
@@ -25,8 +27,14 @@ class Content extends BxController
 {
     private const STATUS_PUBLISHED = 1;
 
+    /** 分类启用态 */
+    private const CATEGORY_ENABLED = 1;
+
     /** 列表字段白名单：不含正文 content，不含内部归属字段 */
     private const LIST_FIELDS = 'id,category_id,title,cover,summary,author,source,is_top,view_count,publish_at,created_at';
+
+    /** 分类字段白名单：仅筛选所需精简字段，无敏感/内部字段 */
+    private const CATEGORY_FIELDS = 'id,name,parent_id';
 
     /** 详情字段白名单：含正文 content，仍不含内部归属字段 */
     private const DETAIL_FIELDS = 'id,category_id,title,cover,summary,content,author,source,is_top,view_count,publish_at,created_at';
@@ -54,6 +62,20 @@ class Content extends BxController
             ->page($page, $size)->select()->toArray();
 
         return $this->paginate($list, $total, $page, $size);
+    }
+
+    /**
+     * 启用态内容分类（精简字段，供文章页筛选 chips 消费）。GET /api/v1/content/categories
+     * 免登录、无分页；按 sort 升序，仅返回 {id,name,parent_id}，不含树正文与敏感字段。
+     */
+    public function categories(): Response
+    {
+        $list = ContentCategoryModel::field(self::CATEGORY_FIELDS)
+            ->where('status', self::CATEGORY_ENABLED)
+            ->order('sort', 'asc')->order('id', 'asc')
+            ->select()->toArray();
+
+        return $this->success($list);
     }
 
     /**
