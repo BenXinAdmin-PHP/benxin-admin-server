@@ -231,6 +231,32 @@ upload_max_filesize = 100M
 - **前端常量对齐**：web 端有上传前大小预判常量 `RESOURCE_MAX_UPLOAD_MB`（`src/api/resource.ts`，当前 **100**，已与 app 层 100MB 对齐）；若调整 app 层 / php.ini 上限，请同步改该常量，否则前端会按旧值提前拦截。
 - **大视频推荐 VOD 客户端直传**：开通腾讯云 VOD 后，大视频由浏览器经官方 SDK **直传腾讯云、不经 PHP / 服务端中转**，无 php.ini 限额；服务端中转（local / OSS / 七牛）始终受其约束。
 
+### PHP 生产安全配置（display_errors / APP_DEBUG）
+
+> 生产两道「错误不进响应体」的配置，**防信息泄露 + 防响应被 PHP 错误污染**。与上节「大文件上传配置」互补：即便 php 限额拒绝大文件，本节配置确保响应不被 warning 污染（前端能正确解析为失败、而非拿到脏数据）。
+
+**① `display_errors`（生产必关）**
+
+开发环境 `display_errors=On` 方便调试（错误直接显示），但**生产必须 `Off`**：否则错误信息（文件路径 / SQL / 框架版本 / 调用栈）会暴露给访问者（**信息泄露漏洞**），且 PHP warning / notice 文字会被打印进 HTTP 响应体、**污染 JSON 响应**（前端拿到脏数据）。生产 `php.ini`：
+
+```ini
+display_errors = Off      ; 错误不输出到响应（生产必关）
+log_errors = On           ; 错误改记日志，运维查日志排查
+error_log = /path/to/php-error.log
+```
+
+裸机 + 宝塔：面板「软件商店 → PHP → 配置修改」处改 `display_errors` / `log_errors`。
+
+**② `APP_DEBUG`（生产关闭）**
+
+生产 `.env` 须 `APP_DEBUG=false`（已列为「安全特性 → 生产基线」）：ThinkPHP 调试模式关闭后，异常经全局异常处理器统一转 `{code,msg}` 信封，**不吐原始错误页 / 调用栈**。
+
+```dotenv
+APP_DEBUG=false
+```
+
+**与素材模块的关联**：素材的 local / 七牛 / OSS 服务端中转上传受 php 限额约束（见上节「大文件上传配置」）；即便大文件被 php 限额拒绝，`display_errors=Off` 也确保响应不被 warning 污染——配合前端拦截器「脏响应如实失败」加固（web 端已落地），构成**两层防御**：PHP 侧让错误根本不进响应（治本）、前端侧让任何来源的脏响应如实失败（治标但稳）。大文件优先走 **VOD 客户端直传**（不经 PHP、无 php 限额）或调大 php 限额（均见上节）。
+
 ### 云存储 / VOD 开通（可选扩展，默认关闭）
 
 > ★ 云存储（阿里 OSS / 七牛）与 VOD（腾讯云）**全是默认关闭的可选扩展**，纯本地零配置即可完整跑通素材管理。开通在后台 **「参数配置」（`group=storage`）** 配 driver + 密钥（敏感项 **AES 加密入库**，展示脱敏）。
