@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-10 14:00:00
+// | @updated   2026-06-16 —— 新增 groups()：去重分组+计数（复用缓存，仅组名非敏感）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -71,6 +72,30 @@ class ConfigService extends BxService
     public function detail(int $id): array
     {
         return $this->toHttp(Config::findOrFail($id)->toArray());
+    }
+
+    /**
+     * 去重分组列表（含各组配置数）——供后台配置页顶栏 Tab 分类。
+     *
+     * 复用 rawAll() 缓存，按配置自然出现顺序去重（前端再按写死顺序排序）；
+     * 仅返回组名与计数（非敏感，不涉密钥）。空组（无配置）自然不出现。
+     *
+     * @return array<int,array{group:string,count:int}>
+     */
+    public function groups(): array
+    {
+        $counts = [];
+        foreach ($this->rawAll() as $row) {
+            $group          = (string) $row['group'];
+            $counts[$group] = ($counts[$group] ?? 0) + 1;
+        }
+
+        $list = [];
+        foreach ($counts as $group => $count) {
+            $list[] = ['group' => $group, 'count' => $count];
+        }
+
+        return $list;
     }
 
     /**
