@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-16 10:00:00
-// | @updated   2026-06-16（封面同步 PM 自绘素材 cover-*.png）
+// | @updated   2026-06-16（封面同步 PM 自绘素材 cover-*.png；storage/login 精修对题）
 // +----------------------------------------------------------------------
 
 use app\common\library\HtmlPurifier;
@@ -107,7 +107,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '架构',
                 'title' => '多路存储与 VOD：素材模块如何默认本地、按需上云',
-                'cover' => '/static/demo/covers/cover-datascope.png',
+                'cover' => '/static/demo/covers/cover-storage.png',
                 'summary' => '按 media_type 路由本地 / 阿里 OSS / 七牛 / 腾讯 VOD，云能力默认关闭，纯本地零配置即可跑通。',
                 'is_top' => 0,
                 'days'  => 6,
@@ -134,7 +134,7 @@ class DemoContentSeeder extends Seeder
             [
                 'cat'   => '安全',
                 'title' => '懒登录 + 双端登录流：C 端认证是怎么设计的',
-                'cover' => '/static/demo/covers/cover-rbac.png',
+                'cover' => '/static/demo/covers/cover-login.png',
                 'summary' => '浏览免登录、核心操作才拦截；小程序 code2session + 手机号，H5 公众号 oauth + 短信验证码。',
                 'is_top' => 0,
                 'days'  => 2,
