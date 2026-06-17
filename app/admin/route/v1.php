@@ -195,6 +195,14 @@ Route::group('v1', function () {
         Route::delete('notices/:id', 'Notice/delete')->middleware(CasbinAuth::class, 'system:notice:delete')->pattern(['id' => '\d+']);
         Route::get('notices', 'Notice/index')->middleware(CasbinAuth::class, 'system:notice:list');
         Route::post('notices', 'Notice/save')->middleware(CasbinAuth::class, 'system:notice:create');
+
+        // ---- 网站管理 · 页面（M6-B 手写，通用页面搭建 schema；供 M6-C 搭建器消费）----
+        // perm: system:page:list（列表/详情）/ system:page:save（新建/更新）/ system:page:delete
+        Route::get('pages/:id', 'Page/read')->middleware(CasbinAuth::class, 'system:page:list')->pattern(['id' => '\d+']);
+        Route::put('pages/:id', 'Page/update')->middleware(CasbinAuth::class, 'system:page:save')->pattern(['id' => '\d+']);
+        Route::delete('pages/:id', 'Page/delete')->middleware(CasbinAuth::class, 'system:page:delete')->pattern(['id' => '\d+']);
+        Route::get('pages', 'Page/index')->middleware(CasbinAuth::class, 'system:page:list');
+        Route::post('pages', 'Page/save')->middleware(CasbinAuth::class, 'system:page:save');
     })->middleware(JwtAuth::class);
 
     // ---- 调试探针（仅调试态注册，生产不暴露）----

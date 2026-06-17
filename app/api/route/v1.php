@@ -59,4 +59,9 @@ Route::group('v1', function () {
 
     // ---- 前台广告位（M5-A A-2，启用 + 生效区间，按 position 过滤）----
     Route::get('banners', 'Banner/index');
+
+    // ---- 前台页面渲染（M6-B，通用页面搭建公开只读；按 lang 解析整页，供官网 Nuxt 消费）----
+    // 免登录纯公开；slug 约束 [a-z0-9-]+；公开接口挂限流 60 次/分/IP（沿用前台只读口径）
+    Route::get('pages/:slug', 'Page/render')->pattern(['slug' => '[a-z0-9\-]+'])
+        ->middleware(Throttle::class, ['visit_rate' => '60/m']);
 });
