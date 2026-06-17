@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-17 10:00:00
+// | @updated   2026-06-17 19:56:30（B1-① 新增 listPublished 已发布页清单，供 Nuxt SSG 枚举 + sitemap）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -309,6 +310,26 @@ class PageService extends BxService
     }
 
     // ===================== api 渲染 =====================
+
+    /**
+     * 已发布页清单（api 公开只读，B1-①）。
+     * 供 Nuxt 官网 SSG build 枚举 /[slug] 预渲染路由 + 动态生成 sitemap 双语条目。
+     * 字段白名单仅 slug + updated_at（查询层 field() 收紧，不靠后置裁剪）；
+     * 仅 status=已发布，软删 + 租户作用域由 BxModel 全局作用域自动排除；
+     * 排序 updated_at 倒序（sitemap lastmod 友好），同值再按 slug 升序兜底确定性。
+     * 语言无关（清单只含 slug），lang 由消费方拉单页 renderBySlug 时决定。
+     *
+     * @return array<int,array{slug:string,updated_at:string}>
+     */
+    public function listPublished(): array
+    {
+        return Page::where('status', Page::STATUS_PUBLISHED)
+            ->field(['slug', 'updated_at'])
+            ->order('updated_at', 'desc')
+            ->order('slug', 'asc')
+            ->select()
+            ->toArray();
+    }
 
     /**
      * 按 slug + lang 渲染整页（api 公开只读）。

@@ -6,6 +6,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
 // | @updated   2026-06-16（C 端演示升级：新增 content/categories 公开分类接口）
+// | @updated   2026-06-17（B1-① 新增 GET pages 已发布页清单集合路由，供 Nuxt SSG 枚举）
 // +----------------------------------------------------------------------
 
 use app\common\middleware\JwtAuth;
@@ -64,4 +65,6 @@ Route::group('v1', function () {
     // 免登录纯公开；slug 约束 [a-z0-9-]+；公开接口挂限流 60 次/分/IP（沿用前台只读口径）
     Route::get('pages/:slug', 'Page/render')->pattern(['slug' => '[a-z0-9\-]+'])
         ->middleware(Throttle::class, ['visit_rate' => '60/m']);
+    // 已发布页清单（B1-①，集合路由置 :slug 之后；免登录，字段白名单 slug+updated_at，供 SSG 枚举 + sitemap）
+    Route::get('pages', 'Page/index')->middleware(Throttle::class, ['visit_rate' => '60/m']);
 });
