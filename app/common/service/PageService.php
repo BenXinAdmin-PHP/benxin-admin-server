@@ -6,6 +6,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-17 10:00:00
 // | @updated   2026-06-17 19:56:30（B1-① 新增 listPublished 已发布页清单，供 Nuxt SSG 枚举 + sitemap）
+// | @updated   2026-06-20 11:00:00（B-增强-② slug 保留词强校验 en/preview → 160001）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -40,6 +41,17 @@ class PageService extends BxService
 
     /** 渲染接口语言白名单（防注入；非白名单归一为 zh） */
     protected const LANGS = ['zh', 'en'];
+
+    /**
+     * slug 保留词黑名单：与 site(Nuxt) 静态路由冲突，写入强校验拦截（B-增强-②，160001）。
+     * 'en'      —— i18n 英文 locale 前缀（/en 会撞英文首页静态路由）。
+     * 'preview' —— 草稿预览路由（/preview，B2-② 跨源握手落点）。
+     * 注：'home' 为 seeder 规范首页，靠 uk_tenant_slug 唯一约束保留，不入此黑名单（避免误伤首页编辑）。
+     *     未来 site 新增静态路由（如 /api 落地页）在此追加；下划线类无需纳入（slug 正则 [a-z0-9-]+ 已排除 _）。
+     *
+     * @var array<int,string>
+     */
+    protected const RESERVED_SLUGS = ['en', 'preview'];
 
     /**
      * 区块 type → 字段 schema。type 白名单即本表键集合（hero/prose/feature-grid/
@@ -273,7 +285,9 @@ class PageService extends BxService
     public function create(array $data): Page
     {
         $data = $this->fillable($data);
-        $this->assertSlugUnique((string) ($data['slug'] ?? ''), null);
+        $slug = (string) ($data['slug'] ?? '');
+        $this->assertSlugNotReserved($slug);
+        $this->assertSlugUnique($slug, null);
         $this->validateBlocks($data['blocks'] ?? []);
         $data['tenant_id'] = Page::currentTenantId();
 
@@ -291,7 +305,9 @@ class PageService extends BxService
         $data = $this->fillable($data);
 
         if (array_key_exists('slug', $data)) {
-            $this->assertSlugUnique((string) $data['slug'], $id);
+            $slug = (string) $data['slug'];
+            $this->assertSlugNotReserved($slug);
+            $this->assertSlugUnique($slug, $id);
         }
         if (array_key_exists('blocks', $data)) {
             $this->validateBlocks($data['blocks']);
@@ -431,6 +447,22 @@ class PageService extends BxService
     protected function fillable(array $data): array
     {
         return array_intersect_key($data, array_flip(self::FILLABLE));
+    }
+
+    /**
+     * slug 保留词拦截（B-增强-②）：命中与 site 静态路由冲突的保留词 → 160001 拒绝。
+     * 调用点紧贴格式校验（PageValidate 正则 [a-z0-9-]+ 已在控制器层先行）之后、
+     * 唯一性查询（assertSlugUnique）之前：值层先行省一次 DB 命中；
+     * slug 此时已是小写规范串，in_array 严格比对即可命中保留词。
+     */
+    protected function assertSlugNotReserved(string $slug): void
+    {
+        if (in_array($slug, self::RESERVED_SLUGS, true)) {
+            throw new BusinessException(
+                '该 slug 为系统保留字（与官网路由冲突），请更换：' . $slug,
+                ErrorCode::PAGE_RESERVED_SLUG,
+            );
+        }
     }
 
     /**
