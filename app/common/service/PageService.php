@@ -9,6 +9,7 @@
 // | @updated   2026-06-20 11:00:00（B-增强-② slug 保留词强校验 en/preview → 160001）
 // | @updated   2026-06-21 10:00:00（C2 ADR-26 页面级 seo：validateSeo 校验 + renderBySlug 按 lang 解析）
 // | @updated   2026-06-21 16:00:00（C2 ADR-26 补：seo 加 og_image 非 i18n 字符串字段，免迁移）
+// | @updated   2026-06-21 18:00:00（ADR-26 修订②：seo i18n 放宽 zh/en 各自可空 + 渲染单语言空不回退，blocks 不动）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -158,9 +159,11 @@ class PageService extends BxService
     /**
      * 校验页面级 SEO（C2，ADR-26）。写入 create/update(seo 分支) 前调用。
      * 口径：null/缺省 → 跳过（合法，存量/回退场景）；提供则须为对象（非列表），
-     * 仅校验白名单键 seo_title/seo_description（i18n，键级可选，复用 assertI18n）+ og_image
-     * （非 i18n 单值字符串：须为 string，空串视同未填，长度 ≤ OG_IMAGE_MAX_LEN）；
+     * 仅校验白名单键 seo_title/seo_description（i18n，键级可选，用宽松 assertSeoI18n——zh/en 各自可空）
+     * + og_image（非 i18n 单值字符串：须为 string，空串视同未填，长度 ≤ OG_IMAGE_MAX_LEN）；
      * 多余键宽容忽略（与 validateBlocks 未知字段口径一致），失败 422 指明路径。
+     * 放宽（ADR-26 修订②）：seo 的 i18n 不强制 zh 非空（与 blocks 的 assertI18n「zh 必填」区分），
+     * 允许只填英文 / 只填中文 / 都不填——为搭建器「清空某语言即可保存」体验服务。
      *
      * @param mixed $seo
      */
@@ -177,7 +180,7 @@ class PageService extends BxService
             if (!array_key_exists($key, $seo) || $seo[$key] === null) {
                 continue; // 该键缺省 → 跳过（键级可选）
             }
-            $this->assertI18n($seo[$key], "seo.{$key}");
+            $this->assertSeoI18n($seo[$key], "seo.{$key}");
         }
         // og_image（非 i18n、中英共用单值 URL）：存在且非 null 时须为字符串；空串视同未填（不报错），
         // 长度上限防滥用；不强校 URL 协议（部署者可填素材库相对路径或绝对 URL）。
@@ -265,6 +268,25 @@ class PageService extends BxService
         }
         if (array_key_exists('en', $value) && $value['en'] !== null && !is_scalar($value['en'])) {
             throw new BusinessException("{$path}.en 必须为字符串");
+        }
+    }
+
+    /**
+     * seo 专用宽松 i18n 形状校验（ADR-26 修订②）：仍须是 {zh,en} 对象（非列表），
+     * zh/en 若提供须为字符串，但 **zh、en 各自可空**（不强制 zh 非空）——与 blocks 的 assertI18n 区分，
+     * 不误改 blocks「zh 必填」口径。空串/缺省视同该语言未填（渲染端按 lang 取、空则交 site 走 hero 回退）。
+     *
+     * @param mixed $value
+     */
+    protected function assertSeoI18n(mixed $value, string $path): void
+    {
+        if (!is_array($value) || array_is_list($value)) {
+            throw new BusinessException("{$path} 必须为 {zh,en} 对象");
+        }
+        foreach (['zh', 'en'] as $k) {
+            if (array_key_exists($k, $value) && $value[$k] !== null && !is_scalar($value[$k])) {
+                throw new BusinessException("{$path}.{$k} 必须为字符串");
+            }
         }
     }
 
@@ -429,16 +451,18 @@ class PageService extends BxService
             $resolved[] = ['type' => $type] + $this->resolveFields($block, $schema, $lang);
         }
 
-        // seo 解析：有 seo 对象 → title/desc 按 lang 解析为字符串、og_image 原样取字符串；
-        // 无（NULL/空对象）→ null 供 site 回退 hero 派生 / 默认 og 图
+        // seo 解析：有 seo 对象 → title/desc 取「该 lang」字符串、og_image 原样取字符串；
+        // 无（NULL/空对象）→ null 供 site 回退 hero 派生 / 默认 og 图。
+        // 放宽（ADR-26 修订②）：seo 的 i18n 用 pickSeoLang——该语言空则返空、**不回退另一语言**
+        // （与 blocks 的 pickLang 空回退 zh 区分），由 site 据空值走 hero 派生回退。
         $seo = null;
         if (is_array($page->seo) && $page->seo !== []) {
             $ogImage = $page->seo['og_image'] ?? null;
             // 非 i18n、不按 lang：仅当为非空字符串才返；空串/缺省/非串 → null（site 走默认 og 图）
             $ogImage = (is_string($ogImage) && trim($ogImage) !== '') ? $ogImage : null;
             $seo = [
-                'seo_title'       => $this->pickLang($page->seo['seo_title'] ?? null, $lang),
-                'seo_description' => $this->pickLang($page->seo['seo_description'] ?? null, $lang),
+                'seo_title'       => $this->pickSeoLang($page->seo['seo_title'] ?? null, $lang),
+                'seo_description' => $this->pickSeoLang($page->seo['seo_description'] ?? null, $lang),
                 'og_image'        => $ogImage,
             ];
         }
@@ -502,6 +526,22 @@ class PageService extends BxService
         }
 
         return is_scalar($val) ? (string) $val : '';
+    }
+
+    /**
+     * 取 seo i18n 字段指定语言文案，**该语言空则返空、不回退另一语言**（ADR-26 修订②）。
+     * 与 pickLang 区分：seo 的单语言空交由 site 走 hero 派生回退，而非串味到另一语言。
+     *
+     * @param mixed $value
+     */
+    protected function pickSeoLang(mixed $value, string $lang): string
+    {
+        if (!is_array($value)) {
+            return '';
+        }
+        $val = $value[$lang] ?? '';
+
+        return is_scalar($val) && trim((string) $val) !== '' ? (string) $val : '';
     }
 
     // ===================== 内部 =====================
