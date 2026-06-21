@@ -8,6 +8,7 @@
 // | @updated   2026-06-17 19:56:30（B1-① 新增 listPublished 已发布页清单，供 Nuxt SSG 枚举 + sitemap）
 // | @updated   2026-06-20 11:00:00（B-增强-② slug 保留词强校验 en/preview → 160001）
 // | @updated   2026-06-21 10:00:00（C2 ADR-26 页面级 seo：validateSeo 校验 + renderBySlug 按 lang 解析）
+// | @updated   2026-06-21 16:00:00（C2 ADR-26 补：seo 加 og_image 非 i18n 字符串字段，免迁移）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -40,8 +41,11 @@ class PageService extends BxService
     /** 后台可写字段白名单（防批量赋值，§8） */
     protected const FILLABLE = ['slug', 'title', 'status', 'blocks', 'seo'];
 
-    /** seo 顶层允许键（与 BLOCK_SCHEMA 同理，多余键宽容忽略；扩展位：未来 og_image 等在此加） */
-    protected const SEO_KEYS = ['seo_title', 'seo_description'];
+    /** seo 中走 i18n {zh,en} 形状的键（og_image 非 i18n、单值字符串，另行校验；多余键宽容忽略） */
+    protected const SEO_I18N_KEYS = ['seo_title', 'seo_description'];
+
+    /** og_image URL 长度上限（字符串，非 i18n、中英共用一张；超限 422） */
+    protected const OG_IMAGE_MAX_LEN = 2048;
 
     /** 渲染接口语言白名单（防注入；非白名单归一为 zh） */
     protected const LANGS = ['zh', 'en'];
@@ -154,8 +158,9 @@ class PageService extends BxService
     /**
      * 校验页面级 SEO（C2，ADR-26）。写入 create/update(seo 分支) 前调用。
      * 口径：null/缺省 → 跳过（合法，存量/回退场景）；提供则须为对象（非列表），
-     * 仅校验白名单键 seo_title/seo_description（键级可选，多余键宽容忽略——与 validateBlocks
-     * 未知字段口径一致），每个存在的键复用 assertI18n（zh 非空字符串、en 可空），失败 422 指明路径。
+     * 仅校验白名单键 seo_title/seo_description（i18n，键级可选，复用 assertI18n）+ og_image
+     * （非 i18n 单值字符串：须为 string，空串视同未填，长度 ≤ OG_IMAGE_MAX_LEN）；
+     * 多余键宽容忽略（与 validateBlocks 未知字段口径一致），失败 422 指明路径。
      *
      * @param mixed $seo
      */
@@ -166,13 +171,24 @@ class PageService extends BxService
         }
         // {} 解出为空数组([])，视同未填；非空列表(纯数字键) 则非法
         if (!is_array($seo) || (array_is_list($seo) && count($seo) > 0)) {
-            throw new BusinessException('seo 必须为 {seo_title,seo_description} 对象');
+            throw new BusinessException('seo 必须为 {seo_title,seo_description,og_image} 对象');
         }
-        foreach (self::SEO_KEYS as $key) {
+        foreach (self::SEO_I18N_KEYS as $key) {
             if (!array_key_exists($key, $seo) || $seo[$key] === null) {
                 continue; // 该键缺省 → 跳过（键级可选）
             }
             $this->assertI18n($seo[$key], "seo.{$key}");
+        }
+        // og_image（非 i18n、中英共用单值 URL）：存在且非 null 时须为字符串；空串视同未填（不报错），
+        // 长度上限防滥用；不强校 URL 协议（部署者可填素材库相对路径或绝对 URL）。
+        if (array_key_exists('og_image', $seo) && $seo['og_image'] !== null) {
+            $img = $seo['og_image'];
+            if (!is_string($img)) {
+                throw new BusinessException('seo.og_image 必须为字符串 URL');
+            }
+            if (mb_strlen($img) > self::OG_IMAGE_MAX_LEN) {
+                throw new BusinessException('seo.og_image 长度不能超过 ' . self::OG_IMAGE_MAX_LEN . ' 字符');
+            }
         }
     }
 
@@ -384,10 +400,11 @@ class PageService extends BxService
      * 按 slug + lang 渲染整页（api 公开只读）。
      * 取 status=已发布 的页；未命中 → 404。i18n 字段按 lang 解析为字符串（空回退 zh），
      * 非 i18n 字段原样透传；字段白名单仅返 {slug,title,blocks,seo}，不外露内部字段。
-     * seo（C2 ADR-26）：按 lang 解析为字符串（空回退 zh，与 blocks 同口径）；页无 seo → seo:null
-     * （site 侧据此走 hero 派生回退）。白名单严格：仅返解析后字符串，不外露 i18n 原始对象。
+     * seo（C2 ADR-26）：seo_title/seo_description 按 lang 解析为字符串（空回退 zh，与 blocks 同口径）；
+     * og_image 非 i18n 原样取字符串（不按 lang；空/缺省/非串 → null）；页无 seo → seo:null
+     * （site 侧据此走 hero 派生 / 默认 og 图回退）。白名单严格：仅返解析后字符串，不外露 i18n 原始对象。
      *
-     * @return array{slug:string,title:string,blocks:array<int,mixed>,seo:array{seo_title:string,seo_description:string}|null}
+     * @return array{slug:string,title:string,blocks:array<int,mixed>,seo:array{seo_title:string,seo_description:string,og_image:string|null}|null}
      */
     public function renderBySlug(string $slug, string $lang): array
     {
@@ -412,12 +429,17 @@ class PageService extends BxService
             $resolved[] = ['type' => $type] + $this->resolveFields($block, $schema, $lang);
         }
 
-        // seo 解析：有 seo 对象 → 按 lang 解析两字段为字符串；无（NULL/空对象）→ null 供 site 回退 hero
+        // seo 解析：有 seo 对象 → title/desc 按 lang 解析为字符串、og_image 原样取字符串；
+        // 无（NULL/空对象）→ null 供 site 回退 hero 派生 / 默认 og 图
         $seo = null;
         if (is_array($page->seo) && $page->seo !== []) {
+            $ogImage = $page->seo['og_image'] ?? null;
+            // 非 i18n、不按 lang：仅当为非空字符串才返；空串/缺省/非串 → null（site 走默认 og 图）
+            $ogImage = (is_string($ogImage) && trim($ogImage) !== '') ? $ogImage : null;
             $seo = [
                 'seo_title'       => $this->pickLang($page->seo['seo_title'] ?? null, $lang),
                 'seo_description' => $this->pickLang($page->seo['seo_description'] ?? null, $lang),
+                'og_image'        => $ogImage,
             ];
         }
 
