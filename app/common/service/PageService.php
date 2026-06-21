@@ -7,6 +7,7 @@
 // | @date      2026-06-17 10:00:00
 // | @updated   2026-06-17 19:56:30（B1-① 新增 listPublished 已发布页清单，供 Nuxt SSG 枚举 + sitemap）
 // | @updated   2026-06-20 11:00:00（B-增强-② slug 保留词强校验 en/preview → 160001）
+// | @updated   2026-06-21 10:00:00（C2 ADR-26 页面级 seo：validateSeo 校验 + renderBySlug 按 lang 解析）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -37,7 +38,10 @@ use think\facade\Db;
 class PageService extends BxService
 {
     /** 后台可写字段白名单（防批量赋值，§8） */
-    protected const FILLABLE = ['slug', 'title', 'status', 'blocks'];
+    protected const FILLABLE = ['slug', 'title', 'status', 'blocks', 'seo'];
+
+    /** seo 顶层允许键（与 BLOCK_SCHEMA 同理，多余键宽容忽略；扩展位：未来 og_image 等在此加） */
+    protected const SEO_KEYS = ['seo_title', 'seo_description'];
 
     /** 渲染接口语言白名单（防注入；非白名单归一为 zh） */
     protected const LANGS = ['zh', 'en'];
@@ -144,6 +148,31 @@ class PageService extends BxService
                 throw new BusinessException("{$path}.type 非法或不在白名单：" . self::typeList());
             }
             $this->validateFields($block, self::BLOCK_SCHEMA[$type], "{$path}({$type})");
+        }
+    }
+
+    /**
+     * 校验页面级 SEO（C2，ADR-26）。写入 create/update(seo 分支) 前调用。
+     * 口径：null/缺省 → 跳过（合法，存量/回退场景）；提供则须为对象（非列表），
+     * 仅校验白名单键 seo_title/seo_description（键级可选，多余键宽容忽略——与 validateBlocks
+     * 未知字段口径一致），每个存在的键复用 assertI18n（zh 非空字符串、en 可空），失败 422 指明路径。
+     *
+     * @param mixed $seo
+     */
+    public function validateSeo(mixed $seo): void
+    {
+        if ($seo === null) {
+            return; // 不填即合法
+        }
+        // {} 解出为空数组([])，视同未填；非空列表(纯数字键) 则非法
+        if (!is_array($seo) || (array_is_list($seo) && count($seo) > 0)) {
+            throw new BusinessException('seo 必须为 {seo_title,seo_description} 对象');
+        }
+        foreach (self::SEO_KEYS as $key) {
+            if (!array_key_exists($key, $seo) || $seo[$key] === null) {
+                continue; // 该键缺省 → 跳过（键级可选）
+            }
+            $this->assertI18n($seo[$key], "seo.{$key}");
         }
     }
 
@@ -289,6 +318,7 @@ class PageService extends BxService
         $this->assertSlugNotReserved($slug);
         $this->assertSlugUnique($slug, null);
         $this->validateBlocks($data['blocks'] ?? []);
+        $this->validateSeo($data['seo'] ?? null);
         $data['tenant_id'] = Page::currentTenantId();
 
         return Db::transaction(fn () => Page::create($data));
@@ -311,6 +341,9 @@ class PageService extends BxService
         }
         if (array_key_exists('blocks', $data)) {
             $this->validateBlocks($data['blocks']);
+        }
+        if (array_key_exists('seo', $data)) {
+            $this->validateSeo($data['seo']);
         }
 
         return Db::transaction(function () use ($page, $data) {
@@ -350,9 +383,11 @@ class PageService extends BxService
     /**
      * 按 slug + lang 渲染整页（api 公开只读）。
      * 取 status=已发布 的页；未命中 → 404。i18n 字段按 lang 解析为字符串（空回退 zh），
-     * 非 i18n 字段原样透传；字段白名单仅返 {slug,title,blocks}，不外露内部字段。
+     * 非 i18n 字段原样透传；字段白名单仅返 {slug,title,blocks,seo}，不外露内部字段。
+     * seo（C2 ADR-26）：按 lang 解析为字符串（空回退 zh，与 blocks 同口径）；页无 seo → seo:null
+     * （site 侧据此走 hero 派生回退）。白名单严格：仅返解析后字符串，不外露 i18n 原始对象。
      *
-     * @return array{slug:string,title:string,blocks:array<int,mixed>}
+     * @return array{slug:string,title:string,blocks:array<int,mixed>,seo:array{seo_title:string,seo_description:string}|null}
      */
     public function renderBySlug(string $slug, string $lang): array
     {
@@ -377,7 +412,16 @@ class PageService extends BxService
             $resolved[] = ['type' => $type] + $this->resolveFields($block, $schema, $lang);
         }
 
-        return ['slug' => $page->slug, 'title' => $page->title, 'blocks' => $resolved];
+        // seo 解析：有 seo 对象 → 按 lang 解析两字段为字符串；无（NULL/空对象）→ null 供 site 回退 hero
+        $seo = null;
+        if (is_array($page->seo) && $page->seo !== []) {
+            $seo = [
+                'seo_title'       => $this->pickLang($page->seo['seo_title'] ?? null, $lang),
+                'seo_description' => $this->pickLang($page->seo['seo_description'] ?? null, $lang),
+            ];
+        }
+
+        return ['slug' => $page->slug, 'title' => $page->title, 'blocks' => $resolved, 'seo' => $seo];
     }
 
     /**
