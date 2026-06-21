@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-12 14:30:00
+// | @updated   2026-06-21（ADR-27-①：新增搭建器富文本专用白名单 cleanBuilderRichtext，与内容模块 clean 分离）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -30,7 +31,15 @@ class HtmlPurifier
         . 'ul,ol,li,h1,h2,h3,h4,h5,h6,blockquote,code,pre,hr,'
         . 'table,thead,tbody,tr,th[colspan|rowspan],td[colspan|rowspan]';
 
+    /**
+     * 搭建器富文本块（ADR-27-①）专用白名单：比内容模块 ALLOWED 更收敛（无 h1/h5/h6/table/span/u/s/pre/hr）。
+     * 仅放行常见排版：段落/二~四级标题/强调/列表/链接/图片/引用/行内代码/换行。与 ALLOWED 独立可调、互不影响。
+     */
+    private const RICHTEXT_ALLOWED = 'p,br,strong,em,h2,h3,h4,ul,ol,li,a[href|title|target],img[src|alt],blockquote,code';
+
     private static ?Purifier $purifier = null;
+
+    private static ?Purifier $richtextPurifier = null;
 
     /**
      * 按白名单净化富文本 HTML。
@@ -42,6 +51,20 @@ class HtmlPurifier
         }
 
         return self::purifier()->purify($html);
+    }
+
+    /**
+     * 搭建器富文本块净化（ADR-27-①）：按 RICHTEXT_ALLOWED 收敛白名单过滤——
+     * 剥离 script/iframe/style/form/on* 事件/javascript:|data: 协议等危险项；img/a 仅 http(s)/相对/mailto。
+     * 与内容模块 clean() 用不同白名单 + 独立缓存实例，互不影响。
+     */
+    public static function cleanBuilderRichtext(string $html): string
+    {
+        if ($html === '') {
+            return '';
+        }
+
+        return self::richtextPurifier()->purify($html);
     }
 
     private static function purifier(): Purifier
@@ -63,5 +86,23 @@ class HtmlPurifier
         $config->set('Cache.DefinitionImpl', null);
 
         return self::$purifier = new Purifier($config);
+    }
+
+    private static function richtextPurifier(): Purifier
+    {
+        if (self::$richtextPurifier !== null) {
+            return self::$richtextPurifier;
+        }
+
+        $config = HTMLPurifier_Config::createDefault();
+        $config->set('HTML.Allowed', self::RICHTEXT_ALLOWED);
+        // 协议白名单：剥离 javascript:/data: 等；img src 限 http(s)/相对、a href 限 http(s)/mailto/相对
+        $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true]);
+        $config->set('Attr.AllowedFrameTargets', ['_blank']);
+        $config->set('HTML.TargetNoopener', true);
+        $config->set('CSS.AllowedProperties', []); // 禁内联 style
+        $config->set('Cache.DefinitionImpl', null);
+
+        return self::$richtextPurifier = new Purifier($config);
     }
 }

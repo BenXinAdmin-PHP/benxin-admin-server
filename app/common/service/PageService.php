@@ -10,6 +10,7 @@
 // | @updated   2026-06-21 10:00:00（C2 ADR-26 页面级 seo：validateSeo 校验 + renderBySlug 按 lang 解析）
 // | @updated   2026-06-21 16:00:00（C2 ADR-26 补：seo 加 og_image 非 i18n 字符串字段，免迁移）
 // | @updated   2026-06-21 18:00:00（ADR-26 修订②：seo i18n 放宽 zh/en 各自可空 + 渲染单语言空不回退，blocks 不动）
+// | @updated   2026-06-21 20:00:00（ADR-27-①：BLOCK_SCHEMA 加 richtext 块 + create/update 双注入 HtmlPurifier 净化）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -19,6 +20,7 @@ namespace app\common\service;
 use app\common\base\BxService;
 use app\common\exception\BusinessException;
 use app\common\library\ErrorCode;
+use app\common\library\HtmlPurifier;
 use app\common\model\Page;
 use think\facade\Db;
 
@@ -128,6 +130,11 @@ class PageService extends BxService
             ]],
             'quickstart' => ['kind' => 'text', 'required' => false],
         ],
+        // 富文本块（ADR-27-①）：html 为一段富文本 HTML，走 blocks i18n（zh 必填、en 可空，不走 seo 放宽）。
+        // 写入经 HtmlPurifier::cleanBuilderRichtext 按搭建器白名单净化（见 sanitizeBlocks），存储即安全。
+        'richtext' => [
+            'html' => ['kind' => 'i18n', 'required' => true],
+        ],
     ];
 
     // ===================== schema 校验 =====================
@@ -154,6 +161,35 @@ class PageService extends BxService
             }
             $this->validateFields($block, self::BLOCK_SCHEMA[$type], "{$path}({$type})");
         }
+    }
+
+    /**
+     * 富文本块净化（ADR-27-①，承 M3-E create/update 双注入）：校验后、入库前调用。
+     * 对 richtext 块的 html.zh / html.en 各自经 HtmlPurifier::cleanBuilderRichtext 按搭建器白名单净化
+     * （剥离 script / iframe / style / on* 事件 / javascript: 协议 等），存储即安全；空值跳过；非 richtext 块原样透传。
+     * server 为唯一权威净化门（ADR-27 决策⑥）。
+     *
+     * @param array<int,mixed> $blocks
+     * @return array<int,mixed>
+     */
+    protected function sanitizeBlocks(array $blocks): array
+    {
+        foreach ($blocks as $i => $block) {
+            if (!is_array($block) || ($block['type'] ?? null) !== 'richtext') {
+                continue;
+            }
+            $html = $block['html'] ?? null;
+            if (!is_array($html)) {
+                continue;
+            }
+            foreach (['zh', 'en'] as $k) {
+                if (isset($html[$k]) && is_string($html[$k]) && $html[$k] !== '') {
+                    $blocks[$i]['html'][$k] = HtmlPurifier::cleanBuilderRichtext($html[$k]);
+                }
+            }
+        }
+
+        return $blocks;
     }
 
     /**
@@ -357,6 +393,9 @@ class PageService extends BxService
         $this->assertSlugUnique($slug, null);
         $this->validateBlocks($data['blocks'] ?? []);
         $this->validateSeo($data['seo'] ?? null);
+        if (array_key_exists('blocks', $data)) {
+            $data['blocks'] = $this->sanitizeBlocks((array) $data['blocks']); // 校验后入库前净化 richtext
+        }
         $data['tenant_id'] = Page::currentTenantId();
 
         return Db::transaction(fn () => Page::create($data));
@@ -379,6 +418,7 @@ class PageService extends BxService
         }
         if (array_key_exists('blocks', $data)) {
             $this->validateBlocks($data['blocks']);
+            $data['blocks'] = $this->sanitizeBlocks((array) $data['blocks']); // 校验后入库前净化 richtext
         }
         if (array_key_exists('seo', $data)) {
             $this->validateSeo($data['seo']);
