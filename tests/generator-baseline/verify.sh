@@ -5,6 +5,7 @@
 # | @author    仗键天涯(daxing)
 # | @email     3442535897@qq.com
 # | @date      2026-06-14
+# | @updated   2026-10-20 18:42:23（生成命令失败与样板漂移分开报告）
 # +----------------------------------------------------------------------
 #
 # 用法（仓库根目录或任意位置均可）：bash tests/generator-baseline/verify.sh
@@ -21,6 +22,8 @@ cd "$(dirname "$0")/../.." || exit 2   # → 仓库根目录
 BASE="tests/generator-baseline"
 TMP="runtime/generated/_verify"        # 临时重生成目录（runtime/ 被 .gitignore 忽略）
 rm -rf "$TMP"
+LOG="$(mktemp)"
+trap 'rm -rf "$TMP"; rm -f "$LOG"' EXIT
 
 fail=0
 for m in post role menu dept admin dict config file; do
@@ -30,7 +33,12 @@ for m in post role menu dept admin dict config file; do
     *)                   opt="" ;;
   esac
 
-  php think bx:make "bx_$m" $opt --output="$TMP/$m" --force >/dev/null 2>&1
+  if ! php think bx:make "bx_$m" $opt --output="$TMP/$m" --force >"$LOG" 2>&1; then
+    echo "  ✗ $m 生成失败（未进行保真对比）："
+    sed -n '1,12p' "$LOG"
+    fail=1
+    continue
+  fi
 
   if diff -rq -I '@date' -I '@updated' "$BASE/$m" "$TMP/$m" >/dev/null 2>&1; then
     echo "  ✓ $m"
@@ -41,11 +49,10 @@ for m in post role menu dept admin dict config file; do
   fi
 done
 
-rm -rf "$TMP"
 echo "----------------------------------------"
 if [ "$fail" -eq 0 ]; then
   echo "保真回归通过 ✅（生成 == 黄金样板，仅 @date 差）"
 else
-  echo "保真回归失败 ❌（生成器改动污染了样板，请核对上方差异）"
+  echo "保真回归未通过 ❌（请按各标的的生成错误或实际差异排查）"
 fi
 exit "$fail"

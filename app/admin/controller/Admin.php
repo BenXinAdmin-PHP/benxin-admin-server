@@ -21,6 +21,12 @@ use think\Response;
  */
 class Admin extends BxController
 {
+    /** GET /admin/v1/admins/dashboard-stats */
+    public function dashboardStats(): Response
+    {
+        return $this->success((new AdminService($this->app))->dashboardStats($this->request->adminUser));
+    }
+
     /**
      * 列表（分页；keyword/dept_id/status 筛选）。
      * GET /admin/v1/admins

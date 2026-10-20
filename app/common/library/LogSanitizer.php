@@ -32,7 +32,7 @@ class LogSanitizer
         'mobile', 'phone', 'sms_code', 'verify_code', 'captcha',
         // M5-B 登录：一次性凭据不落日志明文——code(wx.login/oauth) / phone_code(getPhoneNumber)
         // 注：精确键匹配，会一并打码业务体里名为 code 的字段（如角色 code），审计保真换安全，取舍接受。
-        'code', 'phone_code',
+        'code', 'phone_code', 'state', 'challenge_token',
     ];
 
     /** 语义匹配（键名含这些片段即视为敏感） */

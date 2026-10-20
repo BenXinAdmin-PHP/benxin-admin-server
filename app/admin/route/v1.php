@@ -11,6 +11,8 @@
 
 use app\admin\middleware\CasbinAuth;
 use app\admin\middleware\JwtAuth;
+use app\admin\middleware\RecordScopeAuth;
+use app\admin\middleware\SuperAdminOnly;
 use think\facade\Route;
 use think\middleware\Throttle;
 
@@ -46,22 +48,23 @@ Route::group('v1', function () {
 
         // 角色（perm: system:role:*；分配菜单复用 update）
         Route::get('roles/:id/menus', 'Role/menus')->middleware(CasbinAuth::class, 'system:role:list')->pattern(['id' => '\d+']);
-        Route::put('roles/:id/menus', 'Role/assignMenus')->middleware(CasbinAuth::class, 'system:role:update')->pattern(['id' => '\d+']);
-        Route::put('roles/:id/status', 'Role/status')->middleware(CasbinAuth::class, 'system:role:update')->pattern(['id' => '\d+']);
+        Route::put('roles/:id/menus', 'Role/assignMenus')->middleware(CasbinAuth::class, 'system:role:update')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
+        Route::put('roles/:id/status', 'Role/status')->middleware(CasbinAuth::class, 'system:role:update')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
         Route::get('roles/:id', 'Role/read')->middleware(CasbinAuth::class, 'system:role:list')->pattern(['id' => '\d+']);
-        Route::put('roles/:id', 'Role/update')->middleware(CasbinAuth::class, 'system:role:update')->pattern(['id' => '\d+']);
-        Route::delete('roles/:id', 'Role/delete')->middleware(CasbinAuth::class, 'system:role:delete')->pattern(['id' => '\d+']);
+        Route::put('roles/:id', 'Role/update')->middleware(CasbinAuth::class, 'system:role:update')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
+        Route::delete('roles/:id', 'Role/delete')->middleware(CasbinAuth::class, 'system:role:delete')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
         Route::get('roles', 'Role/index')->middleware(CasbinAuth::class, 'system:role:list');
-        Route::post('roles', 'Role/save')->middleware(CasbinAuth::class, 'system:role:create');
+        Route::post('roles', 'Role/save')->middleware(CasbinAuth::class, 'system:role:create')->middleware(SuperAdminOnly::class);
 
         // 管理员（perm: system:admin:*；改密/分配角色复用 update）
-        Route::put('admins/:id/password', 'Admin/password')->middleware(CasbinAuth::class, 'system:admin:update')->pattern(['id' => '\d+']);
-        Route::put('admins/:id/status', 'Admin/status')->middleware(CasbinAuth::class, 'system:admin:update')->pattern(['id' => '\d+']);
-        Route::get('admins/:id', 'Admin/read')->middleware(CasbinAuth::class, 'system:admin:list')->pattern(['id' => '\d+']);
-        Route::put('admins/:id', 'Admin/update')->middleware(CasbinAuth::class, 'system:admin:update')->pattern(['id' => '\d+']);
-        Route::delete('admins/:id', 'Admin/delete')->middleware(CasbinAuth::class, 'system:admin:delete')->pattern(['id' => '\d+']);
+        Route::get('admins/dashboard-stats', 'Admin/dashboardStats')->middleware(CasbinAuth::class, 'system:admin:list');
+        Route::put('admins/:id/password', 'Admin/password')->middleware(CasbinAuth::class, 'system:admin:update')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
+        Route::put('admins/:id/status', 'Admin/status')->middleware(CasbinAuth::class, 'system:admin:update')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
+        Route::get('admins/:id', 'Admin/read')->middleware(CasbinAuth::class, 'system:admin:list')->middleware(RecordScopeAuth::class, 'admin')->pattern(['id' => '\d+']);
+        Route::put('admins/:id', 'Admin/update')->middleware(CasbinAuth::class, 'system:admin:update')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
+        Route::delete('admins/:id', 'Admin/delete')->middleware(CasbinAuth::class, 'system:admin:delete')->middleware(SuperAdminOnly::class)->pattern(['id' => '\d+']);
         Route::get('admins', 'Admin/index')->middleware(CasbinAuth::class, 'system:admin:list');
-        Route::post('admins', 'Admin/save')->middleware(CasbinAuth::class, 'system:admin:create');
+        Route::post('admins', 'Admin/save')->middleware(CasbinAuth::class, 'system:admin:create')->middleware(SuperAdminOnly::class);
 
         // 部门（perm: system:dept:*）
         Route::get('depts/tree', 'Dept/tree')->middleware(CasbinAuth::class, 'system:dept:list');
@@ -117,9 +120,9 @@ Route::group('v1', function () {
 
         // 文件管理（perm: system:file:list|upload|delete）；具体 action > /:id > 集合
         Route::post('files/upload', 'File/upload')->middleware(CasbinAuth::class, 'system:file:upload');
-        Route::get('files/:id/raw', 'File/raw')->middleware(CasbinAuth::class, 'system:file:list')->pattern(['id' => '\d+']);
-        Route::get('files/:id', 'File/read')->middleware(CasbinAuth::class, 'system:file:list')->pattern(['id' => '\d+']);
-        Route::delete('files/:id', 'File/delete')->middleware(CasbinAuth::class, 'system:file:delete')->pattern(['id' => '\d+']);
+        Route::get('files/:id/raw', 'File/raw')->middleware(CasbinAuth::class, 'system:file:list')->middleware(RecordScopeAuth::class, 'file')->pattern(['id' => '\d+']);
+        Route::get('files/:id', 'File/read')->middleware(CasbinAuth::class, 'system:file:list')->middleware(RecordScopeAuth::class, 'file')->pattern(['id' => '\d+']);
+        Route::delete('files/:id', 'File/delete')->middleware(CasbinAuth::class, 'system:file:delete')->middleware(RecordScopeAuth::class, 'file')->pattern(['id' => '\d+']);
         Route::get('files', 'File/index')->middleware(CasbinAuth::class, 'system:file:list');
 
         // ---- 内容模块（M4-A，bx:make 生成路由片段并入）----
@@ -195,6 +198,14 @@ Route::group('v1', function () {
         Route::delete('notices/:id', 'Notice/delete')->middleware(CasbinAuth::class, 'system:notice:delete')->pattern(['id' => '\d+']);
         Route::get('notices', 'Notice/index')->middleware(CasbinAuth::class, 'system:notice:list');
         Route::post('notices', 'Notice/save')->middleware(CasbinAuth::class, 'system:notice:create');
+
+        // ---- 网站管理 · 页面（M6-B 手写，通用页面搭建 schema；供 M6-C 搭建器消费）----
+        // perm: system:page:list（列表/详情）/ system:page:save（新建/更新）/ system:page:delete
+        Route::get('pages/:id', 'Page/read')->middleware(CasbinAuth::class, 'system:page:list')->pattern(['id' => '\d+']);
+        Route::put('pages/:id', 'Page/update')->middleware(CasbinAuth::class, 'system:page:save')->pattern(['id' => '\d+']);
+        Route::delete('pages/:id', 'Page/delete')->middleware(CasbinAuth::class, 'system:page:delete')->pattern(['id' => '\d+']);
+        Route::get('pages', 'Page/index')->middleware(CasbinAuth::class, 'system:page:list');
+        Route::post('pages', 'Page/save')->middleware(CasbinAuth::class, 'system:page:save');
     })->middleware(JwtAuth::class);
 
     // ---- 调试探针（仅调试态注册，生产不暴露）----

@@ -5,7 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-07 21:00:00
-// | @updated   2026-06-15 18:30:00
+// | @updated   2026-06-20 11:00:00（B-增强-② 启用 16xxxx 页面/搭建器段，新增 160001 slug 保留词）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -22,7 +22,7 @@ namespace app\common\library;
  *   422xxx   业务校验失败
  *   429xxx   触发限流
  *   500xxx   服务端错误
- * 业务段（各模块分配）：内容 11xxxx、支付 12xxxx、消息 13xxxx、微信 14xxxx
+ * 业务段（各模块分配）：内容 11xxxx、支付 12xxxx、消息 13xxxx、微信 14xxxx、C端登录 15xxxx、页面/搭建器 16xxxx
  */
 class ErrorCode
 {
@@ -93,6 +93,9 @@ class ErrorCode
     public const WECHAT_OAUTH_FAILED        = 140006; // 公众号 oauth 失败
     public const WECHAT_API_ERROR           = 140099; // 微信接口通用错误（透传 errcode/errmsg）
 
+    // 16xxxx 页面/搭建器业务段（B-增强-②，ADR-21 预留段正式启用，§6.2）
+    public const PAGE_RESERVED_SLUG = 160001; // slug 命中系统保留词（与 site 静态路由冲突，强校验拦截）
+
     /**
      * 错误码 → 默认提示语映射。
      *
@@ -142,6 +145,8 @@ class ErrorCode
         self::WECHAT_CODE2SESSION_FAILED => '小程序登录凭证校验失败',
         self::WECHAT_OAUTH_FAILED        => '公众号网页授权失败',
         self::WECHAT_API_ERROR           => '微信接口调用失败',
+
+        self::PAGE_RESERVED_SLUG => '该 slug 为系统保留字（与官网路由冲突），请更换',
     ];
 
     /**

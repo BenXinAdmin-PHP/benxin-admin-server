@@ -9,7 +9,7 @@
 //
 // 运行：php tests/m5b_login_mock.php  （仅本地/CI 离线自测，不依赖真实微信/短信凭据）
 // 覆盖：MiniAccount::getPhoneNumber / code2session / MpAccount::oauthAccessToken（mock http）
-//      + UserAuthService 登录即注册四级定位 + Login 控制器端到端（withPost）+ 令牌隔离回归。
+//      + UserAuthService 登录即注册四级定位 + Login 控制器端到端（含一次性 code/state/challenge）+ 令牌隔离回归。
 // 修正 M4-B 已知项④「mock 脚本散落 /tmp」：本脚本入库留档。
 
 declare(strict_types=1);
@@ -113,6 +113,13 @@ function runAction(callable $fn): array
 function setPost(array $data): void
 {
     app()->request->withPost($data);
+}
+
+function oauthState(): string
+{
+    app()->request->withGet(['redirect_uri' => 'https://example.test/?bx_oauth_callback=1']);
+    $issued = runAction(fn () => (new Login(app()))->oauthUrl());
+    return (string) ($issued['data']['state'] ?? '');
 }
 
 // 计数辅助
@@ -253,29 +260,51 @@ setPost(['code' => 'wxcode1']); // 同 openid TMOCKMINIC1，已注册
 $c3 = runAction(fn () => (new Login($app))->mini());
 ok('C3 小程序老用户静默发令牌（无 phone_code 也成功）', $c3['code'] === 0 && !empty($c3['data']['access_token']));
 
-// H5 准备：oauth 返回固定 openid
-$mock->routes['/sns/oauth2/access_token'] = ['access_token' => 'WAT', 'openid' => 'TMOCKMPC1', 'unionid' => ''];
+// H5 准备：微信 oauth code 只能兑换一次（旧 mock 固定响应掩盖了首次绑定故障）
+$usedOauthCodes = [];
+$mock->routes['/sns/oauth2/access_token'] = function ($query) use (&$usedOauthCodes) {
+    $code = (string) ($query['code'] ?? '');
+    if (isset($usedOauthCodes[$code])) {
+        return ['errcode' => 40163, 'errmsg' => 'code been used'];
+    }
+    $usedOauthCodes[$code] = true;
+    return ['access_token' => 'WAT', 'openid' => 'TMOCKMPC1', 'unionid' => ''];
+};
 
-// C4 H5 新用户缺 sms_code → 150001
-setPost(['code' => 'oauthc1', 'mobile' => '17700000010']);
+// C4 H5 新用户仅交换一次 code，返回短期 challenge
+setPost(['code' => 'oauthc1', 'state' => oauthState()]);
 $c4 = runAction(fn () => (new Login($app))->h5());
-ok('C4 H5 新用户缺 sms_code → 150001', $c4['code'] === 150001);
+$ticket = (string) ($c4['data']['challenge_token'] ?? '');
+ok('C4 H5 新用户一次兑换 code → 150001 + challenge', $c4['code'] === 150001 && strlen($ticket) === 36);
 
-// C5 H5 新用户 sms_code 错 → 130004（先种正确码再用错码）
+// C5 H5 新用户 sms_code 错 → 130004，challenge 仍可重试
 BxCache::store()->set('sms:code:login:17700000011', '123456', 300);
-setPost(['code' => 'oauthc1', 'mobile' => '17700000011', 'sms_code' => '000000']);
-$c5 = runAction(fn () => (new Login($app))->h5());
-ok('C5 H5 新用户 sms_code 错 → 130004', $c5['code'] === 130004);
+setPost(['challenge_token' => $ticket, 'mobile' => '17700000011', 'sms_code' => '000000']);
+$c5 = runAction(fn () => (new Login($app))->h5Complete());
+ok('C5 H5 短信码错误且 challenge 可重试', $c5['code'] === 130004 && BxCache::store()->has("login:h5_challenge:{$ticket}"));
 
-// C6 H5 新用户 sms_code 正确 → 注册成功 + 发令牌
-setPost(['code' => 'oauthc1', 'mobile' => '17700000011', 'sms_code' => '123456']);
-$c6 = runAction(fn () => (new Login($app))->h5());
-ok('C6 H5 新用户 sms_code 正确 → 注册成功发令牌', $c6['code'] === 0 && !empty($c6['data']['access_token']));
+// C6 H5 新用户用 challenge + 正确短信码完成注册，全程 code 只兑换一次
+setPost(['challenge_token' => $ticket, 'mobile' => '17700000011', 'sms_code' => '123456']);
+$c6 = runAction(fn () => (new Login($app))->h5Complete());
+ok('C6 H5 challenge + 短信码注册发令牌', $c6['code'] === 0 && !empty($c6['data']['access_token']) && count($usedOauthCodes) === 1);
+
+setPost(['challenge_token' => $ticket, 'mobile' => '17700000011', 'sms_code' => '123456']);
+$replay = runAction(fn () => (new Login($app))->h5Complete());
+ok('C6b H5 challenge 不可重放', $replay['code'] === 140006);
 
 // C7 H5 老用户无 mobile/sms_code → 静默发令牌
-setPost(['code' => 'oauthc1']); // 同 openid TMOCKMPC1，已注册
+$oldState = oauthState();
+setPost(['code' => 'oauthc2', 'state' => $oldState]); // 同 openid、新 code
 $c7 = runAction(fn () => (new Login($app))->h5());
 ok('C7 H5 老用户静默发令牌', $c7['code'] === 0 && !empty($c7['data']['access_token']));
+
+setPost(['code' => 'oauthc3', 'state' => $oldState]);
+$badState = runAction(fn () => (new Login($app))->h5());
+ok('C8 已消费的 oauth state 不可重放', $badState['code'] === 140006 && count($usedOauthCodes) === 2);
+
+setPost(['code' => 'oauthc2', 'state' => oauthState()]);
+$usedCode = runAction(fn () => (new Login($app))->h5());
+ok('C9 已消费的微信 oauth code 被拒绝', $usedCode['code'] === 140006);
 
 echo "\n===== 四、令牌闭环 / 隔离回归（复用 M5-A）=====\n";
 

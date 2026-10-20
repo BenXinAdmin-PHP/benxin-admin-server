@@ -30,7 +30,7 @@ use think\Response;
  * C 端双端登录闭环（M5-B，ADR-17，懒登录入口）。两端均免登录、接口级限流（路由声明）。
  *
  * 统一编排（D1，两端对称）：先静默授权拿 openid → 已注册即老用户静默登录（免补凭据）；
- * 未注册返回 150001 引导前端补手机号凭据，前端补齐后重试。
+ * 未注册返回 150001 引导前端补手机号；H5 用短期 challenge 完成绑定，不复用微信 code。
  * 登录成功统一 BxJwt::issueForApi 签发 api 双令牌（响应只回令牌，user 详情留 M5-C）。
  *
  * 安全（§8）：code/phone_code/sms_code 一次性凭据不落日志明文（LogSanitizer 黑名单）；
@@ -38,6 +38,8 @@ use think\Response;
  */
 class Login extends BxController
 {
+    private const H5_CHALLENGE_TTL = 300;
+
     /**
      * 小程序登录。POST /api/v1/login/mini { code, phone_code? }
      * code → code2session 拿 openid；新用户用 phone_code 换手机号（免 session_key）。
@@ -71,13 +73,18 @@ class Login extends BxController
     }
 
     /**
-     * H5 公众号登录。POST /api/v1/login/h5 { code, mobile?, sms_code? }
-     * code → oauth 拿 openid；新用户用短信验证码校验拿手机号。
-     * D5：后端靠 oauth 天然约束微信环境（非微信拿不到 code → 140006），UA 判断留 M5-C。
+     * H5 公众号登录。POST /api/v1/login/h5 { code, state }
+     * code 只能向微信交换一次；新用户领取短期 challenge 后再绑定手机号。
+     * D5：后端靠 oauth 天然约束微信环境（非微信拿不到 code → 140006），UA 判断留前端。
      */
     public function h5(): Response
     {
         validate(LoginValidate::class)->scene('h5')->check($this->request->post());
+
+        $state = (string) $this->request->post('state', '');
+        if (!$this->consumeCacheKey("login:oauth_state:{$state}")) {
+            throw new BusinessException('授权状态已失效，请重新授权', ErrorCode::WECHAT_OAUTH_FAILED);
+        }
 
         // 1) oauth code 换网页授权 token + openid(+unionid)；失败透传 140006
         $oauth   = WechatManager::mp()->oauthAccessToken((string) $this->request->post('code', ''));
@@ -89,27 +96,62 @@ class Login extends BxController
 
         $service = new UserAuthService($this->app);
 
-        // 2) 未注册（无 mp openid 关联）才需手机号 + 短信验证码
-        $mobile = null;
+        // 2) 新用户返回短期 challenge；不再复用已被微信消费的 code。
         if (!$service->isRegistered('mp', $openid)) {
-            $mobile  = trim((string) $this->request->post('mobile', ''));
-            $smsCode = trim((string) $this->request->post('sms_code', ''));
-            if ($mobile === '' || $smsCode === '') {
-                return $this->fail(ErrorCode::LOGIN_NEED_MOBILE);
-            }
-            // 短信验证码校验（场景 login，消费即删）；失败透传 130004/130005/130006
-            (new SmsCodeService($this->app))->verify($mobile, 'login', $smsCode);
+            $ticket = Uuid::v4();
+            BxCache::store()->set("login:h5_challenge:{$ticket}", [
+                'openid' => $openid,
+                'unionid' => $unionid,
+            ], self::H5_CHALLENGE_TTL);
+            return $this->fail(ErrorCode::LOGIN_NEED_MOBILE, '', ['challenge_token' => $ticket]);
         }
 
-        $user = $service->loginOrRegister('mp', $openid, $mobile, $unionid);
+        $user = $service->loginOrRegister('mp', $openid, null, $unionid);
 
         return $this->issue($user);
+    }
+
+    /** H5 首次绑定。POST /api/v1/login/h5/complete { challenge_token, mobile, sms_code } */
+    public function h5Complete(): Response
+    {
+        validate(LoginValidate::class)->scene('h5Complete')->check($this->request->post());
+
+        $ticket = (string) $this->request->post('challenge_token', '');
+        $key = "login:h5_challenge:{$ticket}";
+        $identity = BxCache::store()->get($key);
+        if (!is_array($identity) || empty($identity['openid'])) {
+            throw new BusinessException('授权已过期，请重新授权', ErrorCode::WECHAT_OAUTH_FAILED);
+        }
+
+        $mobile = trim((string) $this->request->post('mobile', ''));
+        $smsCode = trim((string) $this->request->post('sms_code', ''));
+        (new SmsCodeService($this->app))->verify($mobile, 'login', $smsCode);
+
+        if (!$this->consumeCacheKey($key)) {
+            throw new BusinessException('授权已失效，请重新授权', ErrorCode::WECHAT_OAUTH_FAILED);
+        }
+
+        $user = (new UserAuthService($this->app))->loginOrRegister(
+            'mp',
+            (string) $identity['openid'],
+            $mobile,
+            isset($identity['unionid']) ? (string) $identity['unionid'] : null,
+        );
+        return $this->issue($user);
+    }
+
+    /** 原子消费一次性凭据，避免并发请求重复使用。 */
+    private function consumeCacheKey(string $key): bool
+    {
+        $store = BxCache::store();
+        return (int) $store->handler()->del($store->getCacheKey($key)) === 1;
     }
 
     /**
      * H5 公众号网页授权跳转 URL（M5-C，免登录，供前端 location.href 跳转微信授权）。
      * GET /api/v1/login/wechat/oauth-url { redirect_uri, scope?, state? }
-     * 复用 MpAccount::oauthUrl；后端生成随机 state 写 Valkey 短 TTL，并回传供前端回调比对（防 CSRF）。
+     * 复用 MpAccount::oauthUrl；后端生成随机 state 写 Valkey 短 TTL，前端回调比对后
+     * 再交登录接口原子消费（防 CSRF 与重放）。
      * 注：redirect_uri 域名须属公众号已配「网页授权回调域名」（生产由 daxing 在公众平台配置，后端不强校验）。
      */
     public function oauthUrl(): Response

@@ -6,6 +6,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
 // | @updated   2026-06-09 18:00:00
+// | @updated   2026-10-20 18:42:23（管理员双令牌绑定密码版本）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -102,10 +103,15 @@ class AuthService extends BxService
             BxJwt::revokeRefresh(self::GUARD, $claims['jti']);
             throw AuthException::refreshInvalid();
         }
+        if (!hash_equals(BxJwt::credentialVersion((string) $admin->password), $claims['pwdv'])) {
+            BxJwt::revokeRefresh(self::GUARD, $claims['jti']);
+            throw AuthException::refreshInvalid();
+        }
 
         $access = BxJwt::issueAccess(self::GUARD, [
             'uid'       => (int) $admin->id,
             'tenant_id' => (int) $admin->tenant_id,
+            'pwdv'      => BxJwt::credentialVersion((string) $admin->password),
         ], $claims['jti']);
 
         return [
@@ -155,6 +161,7 @@ class AuthService extends BxService
         $payload = [
             'uid'       => (int) $admin->id,
             'tenant_id' => (int) $admin->tenant_id,
+            'pwdv'      => BxJwt::credentialVersion((string) $admin->password),
         ];
 
         $refresh = BxJwt::issueRefresh(self::GUARD, $payload);

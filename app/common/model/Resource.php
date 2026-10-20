@@ -6,6 +6,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-15 15:08:44
 // | @updated   2026-06-15 15:06:31
+// | @updated   2026-06-21 16:30:00（修正 $hidden 过时注释：tenant_id 已由 M3-G 隐藏）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -17,8 +18,8 @@ use app\common\base\BxModel;
 /**
  * 素材模型。
  *
- * 手工补 tenant_id 入 $hidden（列表字段白名单：不外露 tenant_id/deleted_at，任务书要求）。
- * 生成器当前 $hidden 仅覆盖 deleted_at + 敏感字段，未隐藏 tenant_id —— 见完成报告「狗粮反馈」。
+ * $hidden 隐藏 tenant_id/deleted_at（最小暴露，不外露框架内部维度字段），
+ * 与生成器 M3-G 后默认范式一致（生成器 $hidden 已并入 tenant_id，无需再手工补）。
  */
 class Resource extends BxModel
 {

@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-09 10:00:00
+// | @updated   2026-10-20（适配 Casbin 4 的 Model 与接口签名）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -37,7 +38,7 @@ class BxCasbinAdapter implements Adapter
     /**
      * 从 bx_casbin_rule 装载全部规则进 model。
      */
-    public function loadPolicy($model): void
+    public function loadPolicy(Model $model): void
     {
         $rows = Db::name($this->table)->select();
         foreach ($rows as $row) {
@@ -48,15 +49,15 @@ class BxCasbinAdapter implements Adapter
     /**
      * 全量落盘：清空后按 model 内 p / g 策略重写。
      */
-    public function savePolicy($model): void
+    public function savePolicy(Model $model): void
     {
         Db::name($this->table)->whereRaw('1=1')->delete();
 
         foreach (['p', 'g'] as $sec) {
-            if (!isset($model->model[$sec])) {
+            if (!isset($model[$sec])) {
                 continue;
             }
-            foreach ($model->model[$sec] as $ptype => $ast) {
+            foreach ($model[$sec] as $ptype => $ast) {
                 foreach ($ast->policy as $rule) {
                     Db::name($this->table)->insert($this->ruleToRow($ptype, $rule));
                 }
@@ -71,7 +72,7 @@ class BxCasbinAdapter implements Adapter
      * @param string             $ptype 策略类型
      * @param array<int,string>  $rule  规则值（按 v0..v5 顺序）
      */
-    public function addPolicy($sec, $ptype, $rule): void
+    public function addPolicy(string $sec, string $ptype, array $rule): void
     {
         Db::name($this->table)->insert($this->ruleToRow($ptype, $rule));
     }
@@ -81,7 +82,7 @@ class BxCasbinAdapter implements Adapter
      *
      * @param array<int,string> $rule
      */
-    public function removePolicy($sec, $ptype, $rule): void
+    public function removePolicy(string $sec, string $ptype, array $rule): void
     {
         $query = Db::name($this->table)->where('ptype', $ptype);
         foreach (array_values($rule) as $i => $value) {
@@ -98,7 +99,7 @@ class BxCasbinAdapter implements Adapter
      * @param int    $fieldIndex
      * @param string ...$fieldValues
      */
-    public function removeFilteredPolicy($sec, $ptype, $fieldIndex, ...$fieldValues): void
+    public function removeFilteredPolicy(string $sec, string $ptype, int $fieldIndex, string ...$fieldValues): void
     {
         $query = Db::name($this->table)->where('ptype', $ptype);
         foreach ($fieldValues as $offset => $value) {
