@@ -25,6 +25,7 @@ Route::group('v1', function () {
     Route::post('login/mini', 'Login/mini')->middleware(Throttle::class, ['visit_rate' => '10/m']);
     // H5 公众号：oauth code → openid → 老用户静默 / 新用户短信验证码（限微信环境，UA 判断在前端）
     Route::post('login/h5', 'Login/h5')->middleware(Throttle::class, ['visit_rate' => '10/m']);
+    Route::post('login/h5/complete', 'Login/h5Complete')->middleware(Throttle::class, ['visit_rate' => '10/m']);
 
     // ---- C 端认证（M5-A，api guard）----
     // 刷新：自校验 refresh token，不挂 JwtAuth；签发新 access（refresh 不轮换）

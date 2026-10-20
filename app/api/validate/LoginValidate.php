@@ -14,16 +14,16 @@ namespace app\api\validate;
 use app\common\base\BxValidate;
 
 /**
- * C 端登录入参校验（格式层）。条件必填（新用户才需 mobile/sms_code/phone_code）
- * 由 Controller 按「老用户静默 / 新用户补凭据」编排判定（D1），本校验器仅做格式校验：
- * - 非 require 规则对空值放行（老用户路径可不带 mobile/sms_code/phone_code）。
+ * C 端登录入参校验（格式层）。小程序 phone_code 条件必填；H5 首次绑定单独校验。
  */
 class LoginValidate extends BxValidate
 {
     protected $rule = [
         'code'       => 'require|max:512',   // wx.login / oauth 一次性 code
-        'mobile'     => 'mobile',             // 存在则须为合法手机号（H5 用户填写）
-        'sms_code'   => 'length:4,8',         // 存在则长度合法（H5 短信验证码）
+        'state'      => 'require|length:36', // H5 oauth 回调 state（UUID）
+        'challenge_token' => 'require|length:36', // H5 首次绑定的短期凭据
+        'mobile'     => 'require|mobile',     // H5 首次绑定手机号
+        'sms_code'   => 'require|length:4,8', // H5 短信验证码
         'phone_code' => 'max:512',            // 存在则长度受限（小程序 getPhoneNumber code）
     ];
 
@@ -38,6 +38,8 @@ class LoginValidate extends BxValidate
         // 小程序：code 必填 + phone_code 可选（新用户带）
         'mini' => ['code', 'phone_code'],
         // H5 公众号：code 必填 + mobile/sms_code 可选（新用户带）
-        'h5'   => ['code', 'mobile', 'sms_code'],
+        'h5'   => ['code', 'state'],
+        // H5 新用户：OAuth code 已消费，仅凭短期 challenge + 短信码完成绑定
+        'h5Complete' => ['challenge_token', 'mobile', 'sms_code'],
     ];
 }

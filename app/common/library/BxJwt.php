@@ -6,6 +6,7 @@
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
 // | @updated   2026-06-13 21:30:00
+// | @updated   2026-10-20 18:42:23（管理员密码变更使全部旧令牌失效）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -47,6 +48,12 @@ class BxJwt
 
     /** 各 guard 的 lcobucci 配置缓存（同一请求复用） */
     protected static array $configs = [];
+
+    /** 管理员令牌绑定当前密码哈希；密码变更后所有旧 access/refresh 均失效。 */
+    public static function credentialVersion(string $passwordHash): string
+    {
+        return hash('sha256', $passwordHash);
+    }
 
     // ------------------------------------------------------------------
     // 签发
@@ -129,6 +136,10 @@ class BxJwt
             ->withClaim('tenant_id', (int) ($payload['tenant_id'] ?? 0))
             ->withClaim('token_type', $type);
 
+        if ($guard === 'admin' && isset($payload['pwdv'])) {
+            $builder = $builder->withClaim('pwdv', (string) $payload['pwdv']);
+        }
+
         foreach ($extraClaims as $name => $value) {
             $builder = $builder->withClaim($name, $value);
         }
@@ -152,7 +163,7 @@ class BxJwt
      * @param string $guard
      * @param string $tokenStr   原始 token 串（不含 Bearer 前缀）
      * @param string $expectType 期望类型（access / refresh）
-     * @return array{jti:string,uid:int,tenant_id:int,token_type:string,exp:int,rjti:?string}
+     * @return array{jti:string,uid:int,tenant_id:int,token_type:string,exp:int,rjti:?string,pwdv:string}
      *
      * @throws AuthException 无效(401001) / 过期(401003) / refresh 失效(401004)
      */
@@ -208,6 +219,7 @@ class BxJwt
             'token_type' => $type,
             'exp'        => $exp->getTimestamp(),
             'rjti'       => $claims->has('rjti') ? (string) $claims->get('rjti') : null,
+            'pwdv'       => (string) $claims->get('pwdv', ''),
         ];
     }
 

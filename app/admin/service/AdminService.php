@@ -14,6 +14,7 @@ namespace app\admin\service;
 use app\common\base\BxService;
 use app\common\exception\BusinessException;
 use app\common\model\Admin;
+use app\common\model\LoginLog;
 use app\common\model\Post;
 use app\common\model\Role;
 use think\facade\Db;
@@ -27,6 +28,24 @@ class AdminService extends BxService
     protected const FILLABLE   = ['username', 'nickname', 'avatar', 'mobile', 'email', 'dept_id', 'status', 'remark'];
     public const SUPER_USERNAME = 'admin';
     public const SUPER_ROLE     = 'super_admin';
+
+    /** 首页统计：管理员按当前账号数据权限计数；登录次数只统计本人。 */
+    public function dashboardStats(Admin $acting): array
+    {
+        $admins = Admin::where('id', '>', 0);
+        $this->applyDataScope($admins, $acting, 'dept_id', 'id');
+
+        $today = date('Y-m-d');
+        return [
+            'visible_admins' => $admins->count(),
+            'my_logins_today' => LoginLog::where('tenant_id', Admin::currentTenantId())
+                ->where('admin_id', (int) $acting->id)
+                ->where('status', 1)
+                ->where('created_at', '>=', $today . ' 00:00:00')
+                ->where('created_at', '<', date('Y-m-d', strtotime($today . ' +1 day')) . ' 00:00:00')
+                ->count(),
+        ];
+    }
 
     /**
      * 分页列表（keyword: username/nickname/mobile；dept_id / status 精确）。

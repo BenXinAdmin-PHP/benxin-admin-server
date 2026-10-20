@@ -19,7 +19,7 @@
     "require": {
         "php": "^8.4",
         "aliyuncs/oss-sdk-php": "^2.7",
-        "casbin/casbin": "^0.2.1",
+        "casbin/casbin": "^4.6",
         "ezyang/htmlpurifier": "^4.19",
         "hyperf/pimple": "^2.0",
         "lcobucci/jwt": "^5.6",

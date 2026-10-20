@@ -11,6 +11,7 @@
 // | @updated   2026-06-21 16:00:00（C2 ADR-26 补：seo 加 og_image 非 i18n 字符串字段，免迁移）
 // | @updated   2026-06-21 18:00:00（ADR-26 修订②：seo i18n 放宽 zh/en 各自可空 + 渲染单语言空不回退，blocks 不动）
 // | @updated   2026-06-21 20:00:00（ADR-27-①：BLOCK_SCHEMA 加 richtext 块 + create/update 双注入 HtmlPurifier 净化）
+// | @updated   2026-10-20 18:42:23（页面链接协议白名单）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -30,7 +31,7 @@ use think\facade\Db;
  * 设计：区块 schema 用一张 BLOCK_SCHEMA 元数据表驱动「校验」与「渲染解析」两件事（DRY）。
  * 字段 kind：
  *   - i18n          ：{zh,en} 对象，zh 必填非空、en 可空；渲染解析为字符串（取 lang，空回退 zh）。
- *   - text          ：纯标量字符串（href/icon/image/variant/quickstart/label 等），原样透传。
+ *   - text          ：纯标量字符串（icon/image/variant/quickstart/label 等）；href 另校验安全协议。
  *   - object        ：嵌套对象，按 fields 子 schema 递归。
  *   - arrayOfI18n   ：数组，每元素为 i18n 对象（如 security.chips）。
  *   - arrayOfObject ：数组，每元素按 item 子 schema 递归（如 feature-grid.items / cta.buttons）。
@@ -263,6 +264,9 @@ class PageService extends BxService
                     if ($required && trim((string) $value) === '') {
                         throw new BusinessException("{$fpath} 不能为空");
                     }
+                    if ($field === 'href') {
+                        $this->assertSafeHref($value, $fpath);
+                    }
                     break;
                 case 'object':
                     if (!is_array($value)) {
@@ -286,6 +290,29 @@ class PageService extends BxService
                     }
                     break;
             }
+        }
+    }
+
+    /** 页面按钮只允许站内路径/锚点及 http(s) 绝对链接。 */
+    protected function assertSafeHref(mixed $value, string $path): void
+    {
+        if (!is_string($value)) {
+            throw new BusinessException("{$path} 必须为链接字符串");
+        }
+        $href = trim($value);
+        if ($href === '') {
+            return;
+        }
+        if (preg_match('/[\x00-\x20\x7f\\\\]/', $href)) {
+            throw new BusinessException("{$path} 含非法字符");
+        }
+        if (str_starts_with($href, '#') || (str_starts_with($href, '/') && !str_starts_with($href, '//'))) {
+            return;
+        }
+        $parts = parse_url($href);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])
+            || !in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            throw new BusinessException("{$path} 仅支持站内路径、锚点或 http(s) 链接");
         }
     }
 

@@ -5,6 +5,7 @@
 // | @author    仗键天涯(daxing)
 // | @email     3442535897@qq.com
 // | @date      2026-06-08 16:00:00
+// | @updated   2026-10-20 18:42:23（校验密码版本，撤销全部旧会话）
 // +----------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -45,6 +46,9 @@ class JwtAuth
         $admin = Admin::where('id', $claims['uid'])->where('status', 1)->find();
         if ($admin === null) {
             throw AuthException::unauthorized();
+        }
+        if (!hash_equals(BxJwt::credentialVersion((string) $admin->password), $claims['pwdv'])) {
+            throw AuthException::unauthorized('登录已失效，请重新登录');
         }
 
         // 注入请求上下文，供控制器/服务读取（非请求参数，不可被入参覆盖）
